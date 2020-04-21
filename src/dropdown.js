@@ -265,7 +265,7 @@ export class Dropdown extends View {
         let newHighlight = null;
         let i = 0;
         if (x >= 0 && x < this.hitWidth) {
-            for (const [tby, ty, target] of this.hitTargets) {
+            for (const [tby, ty] of this.hitTargets) {
                 if (y >= tby && y < ty) {
                     newHighlight = i;
                     break;

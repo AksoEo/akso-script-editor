@@ -1,8 +1,7 @@
 import { View } from './view';
 import { createContext, fromRawDefs, toRawDefs, resolveRefs } from './model';
-import { viewPool, getProtoView } from './proto-pool';
+import { viewPool } from './proto-pool';
 import { DefsView } from './defs-view';
-import { ExprView } from './expr-view';
 
 /// Root view of the editor canvas.
 ///

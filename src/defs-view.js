@@ -411,6 +411,7 @@ class BlackHole extends View {
         return true; // accepts everything
     }
     beginTentative (expr) {
+        void expr;
         const t = new Transaction(1, 0.3);
         this.layer.scale = 1.5;
         t.commit();

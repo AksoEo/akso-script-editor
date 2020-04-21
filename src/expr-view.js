@@ -17,6 +17,7 @@ export class ExprSlot extends View {
 
         this.layer.cornerRadius = config.cornerRadius;
         this.onInsertExpr = onInsertExpr;
+        this.exprCtx = exprCtx;
         this.needsLayout = true;
     }
 
