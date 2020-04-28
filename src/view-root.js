@@ -86,7 +86,7 @@ export class ViewRoot {
         if (this.capturedInputTarget) {
             chosenTarget = this.capturedInputTarget;
         } else {
-            const targets = this.getTargetsAtPoint(x, y);
+            const targets = this.getTargetsAtPoint(x, y, true);
             chosenTarget = targets[targets.length - 1]; // last target is on top due to DFS order
         }
 

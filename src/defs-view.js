@@ -4,7 +4,7 @@ import { viewPool, getProtoView } from './proto-pool';
 import config from './config';
 import { TextLayer, ArrowLayer, Transaction } from './layer';
 import { ExprSlot, ExprView } from './expr-view';
-import { remove as removeNode, stdlib } from './model';
+import { remove as removeNode } from './model';
 
 /// Renders a set of definitions.
 export class DefsView extends View {
@@ -16,12 +16,13 @@ export class DefsView extends View {
         super();
 
         this.layer.background = config.defs.background;
+        this.layer.clipContents = true;
 
         this.scrollAnchor = new DefsAnchorView();
         this.defs = defs;
 
-        this.blackHole = new BlackHole();
-        this.blackHole.dragController = this.dragController;
+        this.trash = new Trash();
+        this.trash.dragController = this.dragController;
     }
 
     /// List of arrows by source
@@ -33,6 +34,11 @@ export class DefsView extends View {
         this.needsLayout = true;
     }
 
+    get offset () {
+        const pos = this.layer.absolutePosition;
+        return [-pos[0] + this.scroll[0], -pos[1] + this.scroll[1]];
+    }
+
     #useGraphView = false;
     get useGraphView () {
         return this.#useGraphView;
@@ -42,12 +48,27 @@ export class DefsView extends View {
         this.needsLayout = true;
     }
 
+    #showTrash = false;
+    get showTrash () {
+        return this.#showTrash;
+    }
+    set showTrash (value) {
+        this.#showTrash = value;
+        this.needsLayout = true;
+    }
+
     layout () {
         super.layout();
 
-        this.blackHole.position = [
-            this.size[0] - 16 - this.blackHole.size[0],
-            this.size[1] - 16 - this.blackHole.size[1],
+        this.trash.size = [
+            186,
+            Math.min(this.size[1] * 0.5, 100),
+        ];
+        this.trash.position = [
+            8,
+            this.showTrash
+                ? this.size[1] - this.trash.size[1] - 8
+                : this.size[1],
         ];
 
         // perform layout on all defs so we have their sizes
@@ -122,7 +143,7 @@ export class DefsView extends View {
                 const minX = 0;
                 const maxX = Math.max(0, maxWidth - this.size[0]);
                 const minY = 0;
-                const maxY = Math.max(0, y - this.size[1]);
+                const maxY = Math.max(0, y - this.size[1] + this.trash.size[1]);
                 this.scroll[0] = Math.max(minX, Math.min(this.scroll[0], maxX));
                 this.scroll[1] = Math.max(minY, Math.min(this.scroll[1], maxY));
             }
@@ -130,10 +151,11 @@ export class DefsView extends View {
         }
 
         this.scrollAnchor.defs = this.defs;
-        this.scrollAnchor.floatingExpr = this.defs.floatingExpr;
         this.scrollAnchor.arrows = this.#arrows;
         this.scrollAnchor.flushSubviews();
         this.scrollAnchor.layout();
+
+        this.trash.layout();
     }
 
     tentativeDef = null;
@@ -151,7 +173,7 @@ export class DefsView extends View {
             if (this.tentativeDef) {
                 const [ty, theight] = this.tentativeDef;
                 const py = ty + theight / 2;
-                if (y <= py && y + defView.size[1] >= py) {
+                if (y <= py && y + defView.size[1] + 1 >= py) {
                     y += theight;
                     this.tentativeInsertPos = i;
                 }
@@ -222,6 +244,7 @@ export class DefsView extends View {
     addFloatingExpr (expr) {
         this.defs.floatingExpr.add(expr);
         this.defs.ctx.notifyMutation(this.defs);
+        this.flushSubviews();
     }
     removeFloatingExpr (expr) {
         this.defs.floatingExpr.delete(expr);
@@ -248,8 +271,11 @@ export class DefsView extends View {
 
     *iterSubviews () {
         this.scrollAnchor.flushSubviews();
-        if (this.useGraphView) yield this.blackHole;
         yield this.scrollAnchor;
+        yield this.trash;
+        for (const expr of this.defs.floatingExpr) {
+            yield getProtoView(expr, ExprView);
+        }
     }
 }
 
@@ -344,10 +370,9 @@ class DefView extends View {
         const refView = getProtoView(ref, ExprView);
         const transaction = new Transaction(1, 0);
         refView.dragController = this.dragController;
-        refView.position = [
-            this.position[0] + this.refView.position[0],
-            this.position[1] + this.refView.position[1],
-        ];
+        const refPos = this.refView.absolutePosition;
+        const defsPos = this.dragController.defs.absolutePosition;
+        refView.position = [refPos[0] - defsPos[0], refPos[1] - defsPos[1]];
         this.dragController.defs.addFloatingExpr(ref);
         this.dragController.beginExprDrag(ref, x, y);
         transaction.commit();
@@ -366,8 +391,6 @@ class DefView extends View {
     endExprDrag () {
         if (this.#createdDragRef) {
             this.dragController.endExprDrag();
-        } else {
-            // TODO: open rename dialog
         }
     }
 
@@ -380,8 +403,8 @@ class DefView extends View {
         }
 
         let isDup = false;
-        for (const category in stdlib) {
-            if (stdlib[category].includes(name)) {
+        for (const category in config.stdlibCategories) {
+            if (config.stdlibCategories[category].includes(name)) {
                 isDup = true;
                 break;
             }
@@ -484,15 +507,23 @@ class DefView extends View {
     }
 }
 
-/// Black hole for throwing stuff away
-class BlackHole extends View {
+class Trash extends View {
     constructor () {
         super();
 
-        this.layer.background = [0, 0, 0, 1];
-        this.layer.size = [64, 64];
-        this.layer.cornerRadius = 32;
+        this.layer.background = config.trash.background;
+        this.layer.cornerRadius = config.cornerRadius;
+
+        this.titleLayer = new TextLayer();
+        this.titleLayer.font = config.identFont;
+        this.titleLayer.text = config.trash.title;
+        this.titleLayer.baseline = 'top';
     }
+
+    didUnmount () {
+        this.dragController.unregisterTarget(this);
+    }
+
     get isEmpty () {
         return true; // always hungry
     }
@@ -502,32 +533,35 @@ class BlackHole extends View {
     beginTentative (expr) {
         void expr;
         const t = new Transaction(1, 0.3);
-        this.layer.scale = 1.5;
+        this.layer.background = config.trash.activeBackground;
         t.commit();
     }
     endTentative () {
         const t = new Transaction(1, 0.3);
-        this.layer.scale = 1;
+        this.layer.background = config.trash.background;
         t.commit();
     }
     insertExpr (expr) {
         const t = new Transaction(1, 0.3);
-        this.layer.scale = 1;
+        this.layer.background = config.trash.background;
         t.commit();
         void expr;
     }
     insertDef (def) {
         const t = new Transaction(1, 0.3);
-        this.layer.scale = 1;
+        this.layer.background = config.trash.background;
         t.commit();
         removeNode(def);
     }
+
     layout () {
         super.layout();
         this.dragController.registerTarget(this);
+        this.titleLayer.position = [16, 8];
     }
-    didUnmount () {
-        this.dragController.unregisterTarget(this);
+
+    *iterSublayers () {
+        yield this.titleLayer;
     }
 }
 
@@ -536,6 +570,7 @@ class DragController {
     #dragOffset = [0, 0];
     #currentSlot = null;
     #onlyY = false;
+    #onlyYXPos = null;
     targets = new Set();
 
     constructor (defs) {
@@ -543,6 +578,7 @@ class DragController {
     }
 
     beginDefDrag (def, x, y) {
+        this.defs.showTrash = true;
         this.#draggingNode = def;
         this.#currentSlot = null;
         const defView = getProtoView(def, DefView);
@@ -552,6 +588,7 @@ class DragController {
         }
         defView._isBeingDragged = true;
         this.#onlyY = !defView.usingGraphView;
+        this.#onlyYXPos = defView.absolutePosition[0];
         if (this.defs.useGraphView) {
             this.#dragOffset = [
                 defView.position[0] - x,
@@ -559,25 +596,26 @@ class DragController {
             ];
         } else {
             this.#dragOffset = [
-                defView.position[0] - x - this.defs.scroll[0],
-                defView.position[1] - y - this.defs.scroll[1],
+                defView.position[0] - x - this.defs.offset[0],
+                defView.position[1] - y - this.defs.offset[1],
             ];
         }
         const t = new Transaction(1, 0);
         defView.position = [
-            this.#onlyY ? defView.position[0] : x + this.#dragOffset[0],
+            this.#onlyY ? this.#onlyYXPos : x + this.#dragOffset[0],
             y + this.#dragOffset[1],
         ];
         t.commit();
-        this.defs.putTentative(defView.position[1] + this.defs.scroll[1], defView.size[1]);
+        this.defs.putTentative(defView.position[1] + this.defs.offset[1], defView.size[1]);
         new Transaction(1, 0.3).commitAfterLayout(this.defs.ctx);
     }
     moveDefDrag (x, y) {
         this.moveDrag(x, y, DefView, slot => slot.acceptsDef);
         const defView = getProtoView(this.#draggingNode, DefView);
-        this.defs.putTentative(defView.position[1] + this.defs.scroll[1], defView.size[1]);
+        this.defs.putTentative(defView.position[1] + this.defs.offset[1], defView.size[1]);
     }
     endDefDrag () {
+        this.defs.showTrash = false;
         this.endDrag(DefView, () => {
             const defView = getProtoView(this.#draggingNode, DefView);
             delete defView._isBeingDragged;
@@ -588,8 +626,8 @@ class DragController {
                 // draggingnode will be inserted into defs, so accomodate for scroll pos
                 const t = new Transaction(1, 0);
                 defView.position = [
-                    defView.position[0] + this.defs.scroll[0],
-                    defView.position[1] + this.defs.scroll[1],
+                    defView.position[0] + this.defs.offset[0],
+                    defView.position[1] + this.defs.offset[1],
                 ];
                 t.commit();
 
@@ -607,6 +645,7 @@ class DragController {
         this.#draggingNode = expr;
         this.#currentSlot = null;
         this.#onlyY = false;
+        if (!this.defs.useGraphView) this.defs.showTrash = true;
         const exprView = getProtoView(expr, ExprView);
 
         if (expr.parent) {
@@ -614,7 +653,11 @@ class DragController {
                 // remove from parent
                 const transaction = new Transaction(1, 0);
                 const pos = exprView.absolutePosition;
-                exprView.position = [pos[0] + this.defs.scroll[0], pos[1] + this.defs.scroll[1]];
+                const defsPos = this.defs.absolutePosition;
+                exprView.position = [
+                    pos[0] - defsPos[0],
+                    pos[1] - defsPos[1],
+                ];
                 removeNode(expr);
                 this.defs.addFloatingExpr(expr);
                 this.defs.flushSubviews();
@@ -624,8 +667,10 @@ class DragController {
             // set parent in hovering-over state
             const transaction = new Transaction(1, 0.3);
             const parentView = exprView.parent;
-            parentView.beginTentative(exprView);
-            this.#currentSlot = parentView;
+            if (parentView.beginTentative) {
+                parentView.beginTentative(exprView);
+                this.#currentSlot = parentView;
+            }
             transaction.commitAfterLayout(this.defs.ctx);
         }
         this.#dragOffset = [
@@ -637,6 +682,7 @@ class DragController {
         this.moveDrag(x, y, ExprView);
     }
     endExprDrag () {
+        this.defs.showTrash = false;
         this.endDrag(ExprView, () => {
             if (this.#currentSlot) {
                 this.defs.removeFloatingExpr(this.#draggingNode);
@@ -652,9 +698,10 @@ class DragController {
         const exprView = getProtoView(this.#draggingNode, TypeClass);
 
         let newPos = [
-            this.#onlyY ? exprView.position[0] : x + this.#dragOffset[0],
+            this.#onlyY ? this.#onlyYXPos : x + this.#dragOffset[0],
             y + this.#dragOffset[1],
         ];
+        let newScale = 1;
 
         if (slot !== this.#currentSlot) {
             if (this.#currentSlot) {
@@ -668,11 +715,11 @@ class DragController {
 
         if (this.#currentSlot) {
             const slotPos = this.#currentSlot.absolutePosition;
+            const defsPos = this.defs.absolutePosition;
             const slotSize = this.#currentSlot.size;
-            const origin = this.defs.scrollAnchor.absolutePosition;
             const center = [
-                slotPos[0] - origin[0] + slotSize[0] / 2,
-                slotPos[1] - origin[1] + slotSize[1] / 2,
+                slotPos[0] - defsPos[0] + slotSize[0] / 2,
+                slotPos[1] - defsPos[1] + slotSize[1] / 2,
             ];
 
             const unadjustedCenter = [
@@ -688,10 +735,13 @@ class DragController {
                 center[0] + Math.cos(pointerAngle) * pointerDist - exprView.size[0] / 2,
                 center[1] + Math.sin(pointerAngle) * pointerDist - exprView.size[1] / 2,
             ];
+
+            if (this.#currentSlot instanceof Trash) newScale = 0.5;
         }
 
         const transaction = new Transaction(1, 0.3);
         exprView.position = newPos;
+        exprView.layer.scale = newScale;
         transaction.commitAfterLayout(this.defs.ctx);
 
         this.defs.needsLayout = true;
@@ -703,10 +753,10 @@ class DragController {
                 const transaction = new Transaction(1, 0);
                 const exprView = getProtoView(this.#draggingNode, TypeClass);
                 const slotPos = this.#currentSlot.absolutePosition;
-                const origin = this.defs.scrollAnchor.absolutePosition;
+                const defsPos = this.defs.absolutePosition;
                 exprView.position = [
-                    exprView.position[0] + origin[0] - slotPos[0],
-                    exprView.position[1] + origin[1] - slotPos[1],
+                    exprView.position[0] + defsPos[0] - slotPos[0],
+                    exprView.position[1] + defsPos[1] - slotPos[1],
                 ];
                 transaction.commit();
             }

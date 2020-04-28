@@ -57,12 +57,12 @@ export default {
     },
 
     defs: {
-        background: [1, 1, 1, 1],
+        background: [0.9, 0.9, 0.9, 1],
     },
     def: {
         cornerRadius: 12,
         padding: 8,
-        background: [0.9, 0.9, 0.9, 1],
+        background: [1, 1, 1, 1],
     },
 
     exprSlot: {
@@ -75,8 +75,32 @@ export default {
         hoverBackground: [0, 0, 0, 0.2],
     },
 
-    clipboard: {
-        title: 'Clipboard',
+    trash: {
+        title: 'Drag here to delete',
+        background: [0.7, 0.7, 0.7, 1],
+        activeBackground: [1, 0.3, 0.2, 1],
+    },
+
+    toolbar: {
+        background: [0.7, 0.7, 0.7, 1],
+    },
+
+    library: {
+        items: {
+            primitives: {
+                title: 'Primitives',
+            },
+            references: {
+                title: 'References',
+            },
+            stdlib: {
+                title: 'Standard Library',
+            },
+        },
+        sideTabs: {
+            background: [0.9, 0.9, 0.9, 1],
+            activeBackground: [0.6, 0.6, 0.6, 1],
+        },
     },
 
     icons: {
@@ -91,6 +115,65 @@ export default {
         dropdown: 'M2,5 L12,5 L7,10',
     },
 
+    stdlibCategories: {
+        math: [
+            '+',
+            '-',
+            '*',
+            '/',
+            '^',
+            'mod',
+            'floor',
+            'ceil',
+            'round',
+            'trunc',
+            'sign',
+            'abs',
+        ],
+        logic: [
+            '==',
+            '!=',
+            '>',
+            '<',
+            '>=',
+            '<=',
+            'and',
+            'or',
+            'not',
+            'xor',
+            'id',
+        ],
+        functor_stuff: [
+            'cat',
+            'map',
+            'flat_map',
+            'fold',
+            'fold1',
+            'filter',
+            'index',
+            'length',
+            'contains',
+            'sort',
+            'sum',
+            'min',
+            'max',
+            'avg',
+            'med',
+        ],
+        date_time: [
+            'date_sub',
+            'date_add',
+            'date_today',
+            'date_fmt',
+            'time_now',
+            'datetime_fmt',
+        ],
+        misc: [
+            'currency_fmt',
+            'country_fmt',
+            'phone_fmt',
+        ],
+    },
     stdlibNames: {
         '+': '+',
         '-': '−',
@@ -152,7 +235,6 @@ export default {
         trunc: ['value'],
         sign: ['value'],
         abs: ['value'],
-        if: ['if', 'then', 'otherwise'],
         '==': ['value', 'value'],
         '!=': ['value', 'value'],
         '>': ['value', 'value'],

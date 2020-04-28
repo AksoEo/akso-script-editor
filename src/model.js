@@ -259,7 +259,7 @@ function toRawExpr (expr, makeAux) {
                 const v = stringifyRef(value, makeAux);
                 return { c, v };
             }),
-        }
+        };
     } else throw new Error('invalid internal repr');
 }
 
@@ -296,71 +296,10 @@ export function remove (node) {
     node.ctx.notifyMutation(node);
 }
 
-export const stdlib = {
-    math: [
-        '+',
-        '-',
-        '*',
-        '/',
-        '^',
-        'mod',
-        'floor',
-        'ceil',
-        'round',
-        'trunc',
-        'sign',
-        'abs',
-    ],
-    logic: [
-        'if',
-        '==',
-        '!=',
-        '>',
-        '<',
-        '>=',
-        '<=',
-        'and',
-        'or',
-        'not',
-        'xor',
-        'id',
-    ],
-    functor_stuff: [
-        'cat',
-        'map',
-        'flat_map',
-        'fold',
-        'fold1',
-        'filter',
-        'index',
-        'length',
-        'contains',
-        'sort',
-        'sum',
-        'min',
-        'max',
-        'avg',
-        'med',
-    ],
-    date_time: [
-        'date_sub',
-        'date_add',
-        'date_today',
-        'date_fmt',
-        'time_now',
-        'datetime_fmt',
-    ],
-    misc: [
-        'currency_fmt',
-        'country_fmt',
-        'phone_fmt',
-    ],
-};
-
-function makeStdRefs () {
+export function makeStdRefs () {
     const refs = new Map();
-    for (const category in stdlib) {
-        const items = stdlib[category];
+    for (const category in config.stdlibCategories) {
+        const items = config.stdlibCategories[category];
         for (const name of items) {
             const nameOverride = config.stdlibNames[name] || null;
             const args = config.stdlibArgs[name] || [];

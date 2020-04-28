@@ -67,6 +67,7 @@ export class Layer extends BaseLayer {
     #position = new LayerProperty([0, 0]);
     #size = new LayerProperty([0, 0]);
     #scale = new LayerProperty([1]);
+    #rotation = new LayerProperty([0]);
     #opacity = new LayerProperty([1]);
     #sublayers = new Set();
     #clipContents = false;
@@ -80,6 +81,12 @@ export class Layer extends BaseLayer {
         this.fillNode = document.createElementNS(svgNS, 'rect');
         this.fillNode.setAttribute('class', 'asce-layer-fill');
         this.node.appendChild(this.fillNode);
+
+        this.clipPath = document.createElementNS(svgNS, 'clipPath');
+        this.clipPath.id = 'asce-layer-' + Math.random().toString(36).replace(/\./g, '');
+        this.clipNode = document.createElementNS(svgNS, 'rect');
+        this.clipPath.appendChild(this.clipNode);
+        this.node.appendChild(this.clipPath);
     }
 
     draw () {
@@ -88,6 +95,7 @@ export class Layer extends BaseLayer {
         const size = this.#size.getDynamic();
 
         const scale = +this.#scale.getDynamic()[0].toFixed(3);
+        const rotation = +this.#rotation.getDynamic()[0].toFixed(3);
 
         let pos = [position[0], position[1]];
         pos = [
@@ -95,11 +103,11 @@ export class Layer extends BaseLayer {
             pos[1] + size[1] / 2 - size[1] * scale / 2,
         ];
 
-        this.node.style.transform = `translate(${pos[0]}px, ${pos[1]}px) scale(${scale})`;
+        this.node.style.transform = `translate(${pos[0]}px, ${pos[1]}px) scale(${scale}) rotate(${rotation}deg)`;
         this.node.style.opacity = this.#opacity.getDynamic()[0].toFixed(3);
-        this.fillNode.setAttribute('width', size[0].toFixed(3));
-        this.fillNode.setAttribute('height', size[1].toFixed(3));
-        this.fillNode.setAttribute('rx', this.#cornerRadius.getDynamic()[0].toFixed(3));
+        this.fillNode.setAttribute('width', Math.max(0, size[0]).toFixed(3));
+        this.fillNode.setAttribute('height', Math.max(0, size[1]).toFixed(3));
+        this.fillNode.setAttribute('rx', Math.max(0, this.#cornerRadius.getDynamic()[0]).toFixed(3));
 
         if (this.owner) {
             this.node.dataset.class = this.owner.constructor.name;
@@ -117,7 +125,16 @@ export class Layer extends BaseLayer {
 
         this.fillNode.setAttribute('stroke-width', this.#strokeWidth.getDynamic()[0]);
 
-        this.node.style.overflow = this.#clipContents ? 'hidden' : '';
+        if (this.#clipContents) {
+            this.clipNode.setAttribute('width', this.fillNode.getAttribute('width'));
+            this.clipNode.setAttribute('height', this.fillNode.getAttribute('height'));
+            this.clipNode.setAttribute('rx', this.fillNode.getAttribute('rx'));
+            this.node.style.clipPath = `url(#${this.clipPath.id})`;
+            if (!this.clipPath.parentNode) this.node.appendChild(this.clipPath);
+        } else {
+            this.node.style.clipPath = null;
+            if (this.clipPath.parentNode) this.node.removeChild(this.clipPath);
+        }
 
         const needsUpdate = !!globalTransactions.length
             || this.#background.needsUpdate
@@ -127,6 +144,7 @@ export class Layer extends BaseLayer {
             || this.#stroke.needsUpdate
             || this.#strokeWidth.needsUpdate
             || this.#scale.needsUpdate
+            || this.#rotation.needsUpdate
             || this.#opacity.needsUpdate;
 
         if (needsUpdate) this.needsDisplay = true;
@@ -246,6 +264,12 @@ export class Layer extends BaseLayer {
     }
     set scale (value) {
         if (this.#scale.setStatic([value], getTransaction())) this.needsDisplay = true;
+    }
+    get rotation () {
+        return this.#rotation.getStatic()[0];
+    }
+    set rotation (value) {
+        if (this.#rotation.setStatic([value], getTransaction())) this.needsDisplay = true;
     }
     get opacity () {
         return this.#opacity.getStatic()[0];
