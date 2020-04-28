@@ -84,6 +84,8 @@ export class DefsView extends View {
             this.scrollAnchor.position = [-this.scroll[0], -this.scroll[1]];
             this.performGraphLayout();
 
+            const offset = this.offset;
+
             // calculate arrows
             for (const item of this.defs.defs) {
                 const itemView = getProtoView(item, DefView);
@@ -95,8 +97,8 @@ export class DefsView extends View {
                     const view = viewPool.get(ref.source);
                     if (!view) continue;
                     const absPos = [
-                        view.absolutePosition[0] + view.size[0] / 2 + this.scroll[0],
-                        view.absolutePosition[1] + this.scroll[1],
+                        view.absolutePosition[0] + view.size[0] / 2 + offset[0],
+                        view.absolutePosition[1] + offset[1],
                     ];
 
                     let t;

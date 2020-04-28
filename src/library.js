@@ -10,6 +10,7 @@ export class Library extends View {
         super();
 
         this.defs = defs;
+        this.layer.background = config.library.background;
 
         this.sideTabs = new SideTabs(config.library.items, item => {
             this.toggleSelected(item);
@@ -106,7 +107,7 @@ export class Library extends View {
     layout () {
         super.layout();
         this.sideTabs.height = this.size[1];
-        this.sideTabs.layoutIfNeeded();
+        this.sideTabs.layout();
 
         const contentsWidth = this.size[0] - this.sideTabs.size[0];
 
@@ -138,10 +139,13 @@ class SideTabs extends View {
         this.options = options;
         this.onSelect = onSelect;
 
+        this.layer.clipContents = true;
+        this.layer.background = config.library.sideTabs.background;
+
         this.tabLayers = [];
         for (const k in this.options) {
             const bg = new Layer();
-            bg.eventTarget = this;
+            bg.cornerRadius = 4;
             const labelContainer = new Layer();
             labelContainer.rotation = -90;
             const label = new TextLayer();
@@ -173,11 +177,12 @@ class SideTabs extends View {
             const textSize = layer.label.getNaturalSize();
             const active = this.selected === layer.id;
             layer.bg.background = active
-                ? config.library.sideTabs.activeBackground
-                : config.library.sideTabs.background;
-            layer.bg.position = [0, y];
-            layer.bg.size = [4 + textSize[1] + 4, 16 + textSize[0] + 16];
-            layer.labelContainer.position = [4 + textSize[1] / 2, y + 16 + textSize[0]];
+                ? config.library.sideTabs.activeTab
+                : config.library.sideTabs.tab;
+            const x = active ? 4 : 6;
+            layer.bg.position = [x, y];
+            layer.bg.size = [4 + textSize[1] + 8, 16 + textSize[0] + 16];
+            layer.labelContainer.position = [x + 4 + textSize[1] / 2, y + 16 + textSize[0]];
             y += layer.bg.size[1];
             width = layer.bg.size[0];
 
@@ -188,7 +193,7 @@ class SideTabs extends View {
             });
         }
 
-        this.layer.size = [width, y];
+        this.layer.size = [width, this.height];
     }
 
     onPointerStart ({ y }) {
@@ -213,7 +218,6 @@ class Scrollable extends View {
     constructor (contents) {
         super();
         this.contents = contents;
-
         this.layer.clipContents = true;
     }
 
@@ -228,7 +232,9 @@ class Scrollable extends View {
         const scrollMax = Math.max(0, this.contents.size[1] - this.size[1]);
         this.scroll = Math.max(scrollMin, Math.min(this.scroll, scrollMax));
 
+        this.contents.visibleBoundsY = [this.scroll, this.scroll + this.size[1]];
         this.contents.position = [0, -this.scroll];
+        this.contents.flushSubviews();
     }
 
     onScroll ({ dy }) {
@@ -261,7 +267,15 @@ class ItemList extends View {
     }
 
     *iterSubviews () {
-        for (const item of this.items) yield item;
+        for (const item of this.items) {
+            if (this.visibleBoundsY) {
+                const boundMin = item.position[1];
+                const boundMax = item.position[1] + item.size[1];
+                const isVisible = boundMax > this.visibleBoundsY[0] && boundMin < this.visibleBoundsY[1];
+                if (!isVisible) continue;
+            }
+            yield item;
+        }
     }
 }
 

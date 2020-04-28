@@ -29,6 +29,7 @@ class BaseLayer {
 
     didMount (ctx) {
         this.ctx = ctx;
+        this.needsDisplay = true;
     }
     didUnmount () {}
 
@@ -136,6 +137,16 @@ export class Layer extends BaseLayer {
             if (this.clipPath.parentNode) this.node.removeChild(this.clipPath);
         }
 
+        const willChange = [];
+
+        if (this.#background.needsUpdate) willChange.push('fill');
+        if (this.#cornerRadius.needsUpdate) willChange.push('rx');
+        if (this.#stroke.needsUpdate) willChange.push('stroke');
+        if (this.#strokeWidth.needsUpdate) willChange.push('stroke-width');
+        if (this.#size.needsUpdate) willChange.push('width', 'height');
+
+        this.fillNode.style.willChange = willChange.join(', ');
+
         const needsUpdate = !!globalTransactions.length
             || this.#background.needsUpdate
             || this.#cornerRadius.needsUpdate
@@ -152,7 +163,7 @@ export class Layer extends BaseLayer {
         this.syncSublayers();
 
         for (const layer of this.#sublayers) {
-            layer.draw();
+            if (layer.needsDisplay) layer.draw();
         }
     }
 
@@ -408,30 +419,34 @@ export class ArrowLayer extends BaseLayer {
         const d = `M ${start} C ${c1} ${c2} ${end}`;
         this.node.setAttribute('d', d); // we need to set it here because we need to get points on it
 
-        const totalLen = this.node.getTotalLength();
-        const tangentHelperPoint = this.node.getPointAtLength(totalLen - 1);
+        const arrowSize = this.#arrowSize.getDynamic()[0];
 
-        const tangentDir = Math.atan2(
-            end[1] - tangentHelperPoint.y,
-            end[0] - tangentHelperPoint.x,
-        );
-        const tipSize = Math.min(this.#arrowSize.getDynamic()[0], totalLen);
+        if (arrowSize > 1e-2) {
+            const totalLen = this.node.getTotalLength();
+            const tangentHelperPoint = this.node.getPointAtLength(totalLen - 1);
 
-        let dTip = '';
-        if (tipSize) {
-            const tip1 = [
-                end[0] + tipSize * Math.cos(tangentDir + Math.PI * 3 / 4),
-                end[1] + tipSize * Math.sin(tangentDir + Math.PI * 3 / 4),
-            ];
-            const tip2 = [
-                end[0] + tipSize * Math.cos(tangentDir - Math.PI * 3 / 4),
-                end[1] + tipSize * Math.sin(tangentDir - Math.PI * 3 / 4),
-            ];
+            const tangentDir = Math.atan2(
+                end[1] - tangentHelperPoint.y,
+                end[0] - tangentHelperPoint.x,
+            );
+            const tipSize = Math.min(arrowSize, totalLen);
 
-            dTip = `M ${tip1} ${end} ${tip2}`;
+            let dTip = '';
+            if (tipSize) {
+                const tip1 = [
+                    end[0] + tipSize * Math.cos(tangentDir + Math.PI * 3 / 4),
+                    end[1] + tipSize * Math.sin(tangentDir + Math.PI * 3 / 4),
+                ];
+                const tip2 = [
+                    end[0] + tipSize * Math.cos(tangentDir - Math.PI * 3 / 4),
+                    end[1] + tipSize * Math.sin(tangentDir - Math.PI * 3 / 4),
+                ];
+
+                dTip = `M ${tip1} ${end} ${tip2}`;
+            }
+
+            this.node.setAttribute('d', d + ' ' + dTip);
         }
-
-        this.node.setAttribute('d', d + ' ' + dTip);
 
         const needsUpdate = !!globalTransactions.length
             || this.#start.needsUpdate

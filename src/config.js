@@ -97,9 +97,11 @@ export default {
                 title: 'Standard Library',
             },
         },
+        background: [0.95, 0.95, 0.95, 1],
         sideTabs: {
-            background: [0.9, 0.9, 0.9, 1],
-            activeBackground: [0.6, 0.6, 0.6, 1],
+            background: [0.6, 0.6, 0.6, 1],
+            tab: [0.7, 0.7, 0.7, 1],
+            activeTab: [0.95, 0.95, 0.95, 1],
         },
     },
 
