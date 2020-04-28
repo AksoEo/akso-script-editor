@@ -7,7 +7,7 @@ export default class Editor {
     editorView = new EditorView();
 
     constructor () {
-        this.viewRoot.setRootView(this.editorView);
+        this.viewRoot.push(this.editorView);
     }
 
     get node () {

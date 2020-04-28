@@ -15,7 +15,7 @@ export class DefsView extends View {
     constructor (defs) {
         super();
 
-        this.layer.background = [0.6, 0.6, 0.6, 1];
+        this.layer.background = config.defs.background;
 
         this.scrollAnchor = new DefsAnchorView();
         this.defs = defs;
@@ -33,7 +33,14 @@ export class DefsView extends View {
         this.needsLayout = true;
     }
 
-    didPerformAutoLayout = false;
+    #useGraphView = false;
+    get useGraphView () {
+        return this.#useGraphView;
+    }
+    set useGraphView (value) {
+        this.#useGraphView = value;
+        this.needsLayout = true;
+    }
 
     layout () {
         super.layout();
@@ -46,70 +53,82 @@ export class DefsView extends View {
         // perform layout on all defs so we have their sizes
         for (const item of this.defs.defs) {
             const itemView = getProtoView(item, DefView);
+            itemView.usingGraphView = this.useGraphView;
+            itemView.parentWidth = this.size[0];
             itemView.dragController = this.dragController;
-            itemView.layoutIfNeeded();
+            itemView.layout();
         }
 
-        if (!this.didPerformAutoLayout) {
-            // perform initial layout
-            this.performInitialLayout();
-            this.didPerformAutoLayout = true;
-            this.needsLayout = true; // questionable fix for a glitch where arrows don’t update
-        }
+        if (this.useGraphView) {
+            this.scrollAnchor.position = [-this.scroll[0], -this.scroll[1]];
+            this.performGraphLayout();
 
-        // calculate arrows
-        for (const item of this.defs.defs) {
-            const itemView = getProtoView(item, DefView);
-            if (!this.#arrows.has(item)) this.#arrows.set(item, new Map());
-            const arrows = this.#arrows.get(item);
-            const refSources = new Set();
-            for (const ref of item.referencedBy) {
-                refSources.add(ref.source);
-                const view = viewPool.get(ref.source);
-                if (!view) continue;
-                const absPos = [
-                    view.absolutePosition[0] + view.size[0] / 2 + this.scroll[0],
-                    view.absolutePosition[1] + this.scroll[1],
-                ];
+            // calculate arrows
+            for (const item of this.defs.defs) {
+                const itemView = getProtoView(item, DefView);
+                if (!this.#arrows.has(item)) this.#arrows.set(item, new Map());
+                const arrows = this.#arrows.get(item);
+                const refSources = new Set();
+                for (const ref of item.referencedBy) {
+                    refSources.add(ref.source);
+                    const view = viewPool.get(ref.source);
+                    if (!view) continue;
+                    const absPos = [
+                        view.absolutePosition[0] + view.size[0] / 2 + this.scroll[0],
+                        view.absolutePosition[1] + this.scroll[1],
+                    ];
 
-                let t;
-                if (!arrows.has(ref.source)) {
-                    arrows.set(ref.source, new ArrowLayer());
-                    t = new Transaction(1, 0);
+                    let t;
+                    if (!arrows.has(ref.source)) {
+                        arrows.set(ref.source, new ArrowLayer());
+                        t = new Transaction(1, 0);
+                    }
+                    const arrow = arrows.get(ref.source);
+
+                    arrow.stroke = [0, 0, 0, 0.5];
+
+                    arrow.strokeWidth = 4;
+                    arrow.start = [
+                        itemView.position[0] + itemView.size[0] / 2,
+                        itemView.position[1] + itemView.size[1],
+                    ];
+                    arrow.end = absPos;
+                    const deltaY = arrow.end[1] - arrow.start[1];
+                    const controlDY = deltaY < 0
+                        ? 35 - deltaY / 3
+                        : 35 + deltaY / 10;
+                    arrow.control1 = [arrow.start[0], arrow.start[1] + controlDY];
+                    arrow.control2 = [arrow.end[0], arrow.end[1] - controlDY];
+                    if (t) t.commit();
                 }
-                const arrow = arrows.get(ref.source);
 
-                arrow.stroke = [0, 0, 0, 0.5];
-
-                arrow.strokeWidth = 4;
-                arrow.start = [
-                    itemView.position[0] + itemView.size[0] / 2,
-                    itemView.position[1] + itemView.size[1],
-                ];
-                arrow.end = absPos;
-                const deltaY = arrow.end[1] - arrow.start[1];
-                const controlDY = deltaY < 0
-                    ? 35 - deltaY / 3
-                    : 35 + deltaY / 10;
-                arrow.control1 = [arrow.start[0], arrow.start[1] + controlDY];
-                arrow.control2 = [arrow.end[0], arrow.end[1] - controlDY];
-                if (t) t.commit();
-            }
-
-            for (const k of arrows.keys()) {
-                if (!refSources.has(k)) {
-                    arrows.delete(k);
+                for (const k of arrows.keys()) {
+                    if (!refSources.has(k)) {
+                        arrows.delete(k);
+                    }
                 }
             }
-        }
 
-        for (const k of this.#arrows.keys()) {
-            if (!this.defs.defs.has(k)) {
-                this.#arrows.delete(k);
+            for (const k of this.#arrows.keys()) {
+                if (!this.defs.defs.has(k)) {
+                    this.#arrows.delete(k);
+                }
             }
+        } else {
+            const { maxWidth, y } = this.performLinearLayout();
+            this.#arrows.clear();
+
+            if (!this.useGraphView) {
+                const minX = 0;
+                const maxX = Math.max(0, maxWidth - this.size[0]);
+                const minY = 0;
+                const maxY = Math.max(0, y - this.size[1]);
+                this.scroll[0] = Math.max(minX, Math.min(this.scroll[0], maxX));
+                this.scroll[1] = Math.max(minY, Math.min(this.scroll[1], maxY));
+            }
+            this.scrollAnchor.position = [-this.scroll[0], -this.scroll[1]];
         }
 
-        this.scrollAnchor.position = [-this.scroll[0], -this.scroll[1]];
         this.scrollAnchor.defs = this.defs;
         this.scrollAnchor.floatingExpr = this.defs.floatingExpr;
         this.scrollAnchor.arrows = this.#arrows;
@@ -117,7 +136,42 @@ export class DefsView extends View {
         this.scrollAnchor.layout();
     }
 
-    performInitialLayout () {
+    tentativeDef = null;
+    tentativeInsertPos = null;
+
+    performLinearLayout () {
+        let maxWidth = 0;
+        let y = 0;
+        let i = 0;
+        this.tentativeInsertPos = null;
+        for (const def of this.defs.defs) {
+            const defView = getProtoView(def, DefView);
+            if (defView._isBeingDragged) continue;
+
+            if (this.tentativeDef) {
+                const [ty, theight] = this.tentativeDef;
+                const py = ty + theight / 2;
+                if (y <= py && y + defView.size[1] >= py) {
+                    y += theight;
+                    this.tentativeInsertPos = i;
+                }
+            }
+
+            defView.position = [0, y];
+            y += defView.size[1] + 1;
+            maxWidth = Math.max(maxWidth, defView.size[0]);
+            i++;
+        }
+        if (this.tentativeDef && this.tentativeInsertPos === null) {
+            // did not find an insertion point; probably because it’s out of bounds
+            this.tentativeInsertPos = this.defs.defs.size;
+        }
+        return { maxWidth, y };
+    }
+
+    performGraphLayout () {
+        this.tentativeInsertPos = null;
+
         const id2def = new Map();
         const def2id = new Map();
         let idCounter = 0;
@@ -160,6 +214,7 @@ export class DefsView extends View {
             const def = id2def.get(id);
 
             const defView = getProtoView(def, DefView);
+            if (defView._isBeingDragged) continue;
             defView.position = [node.x - defView.size[0] / 2, node.y - defView.size[1] / 2];
         }
     }
@@ -173,9 +228,27 @@ export class DefsView extends View {
         this.defs.ctx.notifyMutation(this.defs);
     }
 
+    putTentative (y, height) {
+        if (this.useGraphView) return;
+        this.tentativeDef = [y, height];
+        this.needsLayout = true;
+    }
+    endTentative (def) {
+        if (def && this.tentativeInsertPos !== null) {
+            const defs = [...this.defs.defs];
+            defs.splice(this.tentativeInsertPos, 0, def);
+            this.defs.defs = new Set(defs);
+            def.parent = this.defs;
+            this.defs.ctx.notifyMutation(def);
+            this.defs.ctx.notifyMutation(this.defs);
+        }
+        this.tentativeDef = null;
+        this.needsLayout = true;
+    }
+
     *iterSubviews () {
         this.scrollAnchor.flushSubviews();
-        yield this.blackHole;
+        if (this.useGraphView) yield this.blackHole;
         yield this.scrollAnchor;
     }
 }
@@ -228,7 +301,6 @@ class DefView extends View {
         this.eqLayer.font = config.identFont;
         this.eqLayer.text = '=';
 
-        this.layer.cornerRadius = config.def.cornerRadius;
         this.layer.background = config.def.background;
 
         this.exprSlot = new ExprSlot(expr => {
@@ -237,6 +309,16 @@ class DefView extends View {
             this.def.ctx.notifyMutation(expr);
             this.def.ctx.notifyMutation(this.def);
         }, this.def.ctx);
+        this.needsLayout = true;
+    }
+
+    #usingGraphView = false;
+    get usingGraphView () {
+        return this.#usingGraphView;
+    }
+    set usingGraphView (value) {
+        if (value === this.usingGraphView) return;
+        this.#usingGraphView = value;
         this.needsLayout = true;
     }
 
@@ -358,6 +440,10 @@ class DefView extends View {
         this.refView.layout();
         const nameSize = this.refView.size;
 
+        // try to align left hand side if this is the linear view
+        const nameAlignedSize = this.usingGraphView ? nameSize[0] : Math.max(nameSize[0], config.lhsAlignWidth);
+        this.layer.cornerRadius = this.usingGraphView ? config.def.cornerRadius : 0;
+
         const eqSize = this.eqLayer.getNaturalSize();
 
         this.exprSlot.expr = this.def.expr;
@@ -369,7 +455,7 @@ class DefView extends View {
 
         const height = padding + Math.max(nameSize[1], this.exprSlot.size[1]) + padding;
 
-        let width = padding;
+        let width = padding + (nameAlignedSize - nameSize[0]);
         this.refView.position = [width, (height - nameSize[1]) / 2];
         width += nameSize[0];
         width += padding;
@@ -382,7 +468,10 @@ class DefView extends View {
         width += this.exprSlot.size[0];
         width += padding;
 
-        this.layer.size = [width, height];
+        this.layer.size = [
+            this.usingGraphView ? width : Math.max(width, this.parentWidth),
+            height,
+        ];
     }
 
     *iterSublayers () {
@@ -446,6 +535,7 @@ class DragController {
     #draggingNode = null;
     #dragOffset = [0, 0];
     #currentSlot = null;
+    #onlyY = false;
     targets = new Set();
 
     constructor (defs) {
@@ -454,21 +544,69 @@ class DragController {
 
     beginDefDrag (def, x, y) {
         this.#draggingNode = def;
+        this.#currentSlot = null;
         const defView = getProtoView(def, DefView);
-        this.#dragOffset = [defView.position[0] - x, defView.position[1] - y];
+        if (!this.defs.useGraphView) {
+            removeNode(def);
+            this.worldHandle = this.defs.ctx.push(defView);
+        }
+        defView._isBeingDragged = true;
+        this.#onlyY = !defView.usingGraphView;
+        if (this.defs.useGraphView) {
+            this.#dragOffset = [
+                defView.position[0] - x,
+                defView.position[1] - y,
+            ];
+        } else {
+            this.#dragOffset = [
+                defView.position[0] - x - this.defs.scroll[0],
+                defView.position[1] - y - this.defs.scroll[1],
+            ];
+        }
+        const t = new Transaction(1, 0);
+        defView.position = [
+            this.#onlyY ? defView.position[0] : x + this.#dragOffset[0],
+            y + this.#dragOffset[1],
+        ];
+        t.commit();
+        this.defs.putTentative(defView.position[1] + this.defs.scroll[1], defView.size[1]);
+        new Transaction(1, 0.3).commitAfterLayout(this.defs.ctx);
     }
     moveDefDrag (x, y) {
         this.moveDrag(x, y, DefView, slot => slot.acceptsDef);
+        const defView = getProtoView(this.#draggingNode, DefView);
+        this.defs.putTentative(defView.position[1] + this.defs.scroll[1], defView.size[1]);
     }
     endDefDrag () {
         this.endDrag(DefView, () => {
-            this.#currentSlot.insertDef(this.#draggingNode);
+            const defView = getProtoView(this.#draggingNode, DefView);
+            delete defView._isBeingDragged;
+            if (this.worldHandle) {
+                this.worldHandle.pop();
+                this.worldHandle = null;
+
+                // draggingnode will be inserted into defs, so accomodate for scroll pos
+                const t = new Transaction(1, 0);
+                defView.position = [
+                    defView.position[0] + this.defs.scroll[0],
+                    defView.position[1] + this.defs.scroll[1],
+                ];
+                t.commit();
+
+                this.defs.endTentative(this.#draggingNode);
+            } else {
+                this.defs.endTentative();
+            }
+            if (this.#currentSlot) {
+                this.#currentSlot.insertDef(this.#draggingNode);
+            }
         });
     }
 
     beginExprDrag (expr, x, y) {
         this.#draggingNode = expr;
         this.#currentSlot = null;
+        this.#onlyY = false;
         const exprView = getProtoView(expr, ExprView);
 
         if (expr.parent) {
@@ -500,8 +638,10 @@ class DragController {
     }
     endExprDrag () {
         this.endDrag(ExprView, () => {
-            this.defs.removeFloatingExpr(this.#draggingNode);
-            this.#currentSlot.insertExpr(this.#draggingNode);
+            if (this.#currentSlot) {
+                this.defs.removeFloatingExpr(this.#draggingNode);
+                this.#currentSlot.insertExpr(this.#draggingNode);
+            }
         });
     }
     moveDrag (x, y, TypeClass, condition = (() => true)) {
@@ -509,9 +649,12 @@ class DragController {
 
         const slot = this.getProspectiveSlot(x, y, condition);
 
-        let newPos = [x + this.#dragOffset[0], y + this.#dragOffset[1]];
-
         const exprView = getProtoView(this.#draggingNode, TypeClass);
+
+        let newPos = [
+            this.#onlyY ? exprView.position[0] : x + this.#dragOffset[0],
+            y + this.#dragOffset[1],
+        ];
 
         if (slot !== this.#currentSlot) {
             if (this.#currentSlot) {
@@ -548,7 +691,7 @@ class DragController {
         }
 
         const transaction = new Transaction(1, 0.3);
-        getProtoView(this.#draggingNode, TypeClass).position = newPos;
+        exprView.position = newPos;
         transaction.commitAfterLayout(this.defs.ctx);
 
         this.defs.needsLayout = true;
@@ -567,12 +710,12 @@ class DragController {
                 ];
                 transaction.commit();
             }
-
-            const transaction = new Transaction(1, 0.3);
-            commit();
-            this.defs.flushSubviews();
-            transaction.commitAfterLayout(this.defs.ctx);
         }
+
+        const transaction = new Transaction(1, 0.3);
+        commit();
+        this.defs.flushSubviews();
+        transaction.commitAfterLayout(this.defs.ctx);
         this.defs.needsLayout = true;
     }
 

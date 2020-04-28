@@ -16,7 +16,7 @@
     "rollup-plugin-eslint": "^7.0.0"
   },
   "dependencies": {
-    "@tejo/akso-script": "^0.1.10",
+    "@tejo/akso-script": "^0.1.13",
     "dagre": "^0.8.5",
     "pointer-tracker": "^2.3.0"
   }

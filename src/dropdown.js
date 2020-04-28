@@ -14,19 +14,26 @@ export class Dropdown extends View {
         this.layer.strokeWidth = config.primitives.outlineWeight;
         this.layer.cornerRadius = config.cornerRadius;
 
+        this.anchorLayer = new Layer();
+
         this.bgLayer = new Layer();
         this.bgLayer.background = this.layer.background;
         this.bgLayer.stroke = this.layer.stroke;
         this.bgLayer.strokeWidth = this.layer.strokeWidth;
         this.bgLayer.cornerRadius = this.layer.cornerRadius;
+        this.anchorLayer.addSublayer(this.bgLayer);
 
         this.highlightLayer = new Layer();
         this.highlightLayer.background = config.primitives.stringHighlight;
         this.highlightLayer.cornerRadius = this.layer.cornerRadius;
+        this.anchorLayer.addSublayer(this.highlightLayer);
 
         this.iconLayer = new PathLayer();
         this.iconLayer.path = config.icons.dropdown;
+        this.anchorLayer.addSublayer(this.iconLayer);
         this.labels = new Map();
+
+        this.anchored = true;
     }
 
     #expr;
@@ -78,14 +85,16 @@ export class Dropdown extends View {
                 const textLayer = new TextLayer();
                 textLayer.font = config.identFont;
                 this.labels.set(k, textLayer);
+                this.anchorLayer.addSublayer(textLayer);
             }
             const textLayer = this.labels.get(k);
             textLayer.text = this.spec.variants[k];
             this.labels.set(k, textLayer);
         }
 
-        for (const k of this.labels.keys()) {
+        for (const [k, v] of this.labels) {
             if (!(k in this.spec.variants)) {
+                this.anchorLayer.removeSublayer(v);
                 this.labels.delete(k);
             }
         }
@@ -94,6 +103,24 @@ export class Dropdown extends View {
         const selectedLabel = this.labels.get(selected);
 
         if (this.#expanded) {
+            if (this.anchored) {
+                this.anchored = false;
+                this.layer.removeSublayer(this.anchorLayer);
+                const t = new Transaction(1, 0);
+                // push a fake view proxy
+                const viewProxy = {
+                    layer: this.anchorLayer,
+                    didMount: () => {},
+                    sublayers: null,
+                    subviews: null,
+                };
+                viewProxy.layer.owner = viewProxy;
+
+                this.worldAnchor = this.ctx.push(viewProxy);
+                this.anchorLayer.position = this.absolutePosition;
+                t.commit();
+            }
+
             const keyArray = [...this.labels.keys()];
             const selectedIndex = keyArray.indexOf(selected);
 
@@ -124,7 +151,7 @@ export class Dropdown extends View {
                 this.layer.size[0] - config.primitives.paddingX - config.icons.size,
                 (this.layer.size[1] - config.icons.size) / 2,
             ];
-            this.iconLayer.fill = [0, 0, 0, 0];
+            this.iconLayer.fill = config.primitives.iconColor0;
 
             this.highlightLayer.size = [this.bgLayer.size[0], itemHeight + config.primitives.paddingY * 2];
             if (this.highlight !== null) {
@@ -153,10 +180,19 @@ export class Dropdown extends View {
 
                 const isHighlighted = this.highlight === i;
 
-                label.color = isHighlighted ? [1, 1, 1, 1] : [0, 0, 0, 1];
+                label.color = isHighlighted ? config.primitives.colorH : config.primitives.color;
                 i++;
             }
         } else {
+            if (!this.anchored) {
+                this.anchored = true;
+                if (this.worldAnchor) this.worldAnchor.pop();
+                this.anchorLayer.owner = null;
+                const t = new Transaction(1, 0);
+                this.anchorLayer.position = [0, 0];
+                t.commit();
+            }
+
             let selectedLabelSize = [0, 0];
             if (selectedLabel) {
                 selectedLabelSize = selectedLabel.getNaturalSize();
@@ -179,10 +215,10 @@ export class Dropdown extends View {
                 this.layer.size[0] - config.primitives.paddingX - config.icons.size,
                 (this.layer.size[1] - config.icons.size) / 2,
             ];
-            this.iconLayer.fill = [0, 0, 0, 1];
+            this.iconLayer.fill = config.primitives.iconColor;
 
             for (const label of this.labels.values()) {
-                label.color = label === selectedLabel ? [0, 0, 0, 1] : [0, 0, 0, 0];
+                label.color = label === selectedLabel ? config.primitives.color : config.primitives.color0;
                 label.position = [config.primitives.paddingX, this.layer.size[1] / 2];
             }
         }
@@ -283,9 +319,6 @@ export class Dropdown extends View {
     }
 
     *iterSublayers () {
-        yield this.bgLayer;
-        yield this.highlightLayer;
-        yield this.iconLayer;
-        for (const l of this.labels.values()) yield l;
+        if (this.anchored) yield this.anchorLayer;
     }
 }

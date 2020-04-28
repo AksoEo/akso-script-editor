@@ -10,24 +10,16 @@ editor.load({
     _cat1: {
         t: 'c',
         f: 'map',
-        a: ['id', '_cat2'],
+        a: ['add1', '_cat2'],
     },
     _cat2: {
         t: 'c',
         f: 'cat',
-        a: ['_cat3'],
-    },
-    _cat3: {
-        t: 'l',
-        v: ['_cat4', '_cat5'],
+        a: ['_cat4', 'horse'],
     },
     _cat4: {
         t: 'm',
         v: [1, 2, 3, 4],
-    },
-    _cat5: {
-        t: 'l',
-        v: ['horse'],
     },
     horse: {
         t: 'c',
@@ -45,7 +37,15 @@ editor.load({
     expr_call: {
         t: 'c',
         f: 'add_numbers',
-        a: ['_expr_call2'],
+        a: ['_expr_call2', '_expr_call2'],
+    },
+    add1: {
+        t: 'f',
+        p: ['a'],
+        b: {
+            '_1': { t: 'n', v: 1 },
+            '=': { t: 'c', f: '+', a: ['a', '_1'] },
+        },
     },
     add_numbers: {
         t: 'f',
@@ -65,6 +65,7 @@ editor.load({
     number: { t: 'n', v: 142 },
     string: { t: 's', v: 'cats are very cute' },
     string2: { t: 'c', f: 'string' },
+    cond: { t: 'w', m: [{ c: 'boolean', v: 'string' }, { v: 'string2' }] },
 });
 window.editor = editor;
 document.body.style.margin = '0';

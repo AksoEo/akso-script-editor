@@ -59,7 +59,7 @@ export function fromRawDefs (defs, ctx) {
             return makeRef(name, ctx);
         }
 
-        if (subexprCache.has(name)) return subexprCache.get(name);
+        if (subexprCache.has(name)) return { ...subexprCache.get(name) };
 
         if (subexprLocks.has(name) || !defs[name] || forceRef) {
             // EITHER a)
@@ -170,6 +170,16 @@ function fromRawExpr (expr, resolveExpr, ctx) {
         const func = { ctx, type: 'f', params: expr.p, body: defs };
         func.body.parent = func;
         return func;
+    } else if (expr.t === 'w') {
+        return {
+            ctx,
+            type: 'w',
+            matches: expr.m.map(match => {
+                const cond = match.c ? resolveExpr(match.c) : null;
+                const value = resolveExpr(match.v);
+                return { cond, value };
+            }),
+        };
     } else {
         throw new Error(`unknown expression type ${expr.t}`);
     }
@@ -241,6 +251,15 @@ function toRawExpr (expr, makeAux) {
             p: expr.params,
             b: toRawDefs(expr.body),
         };
+    } else if (expr.type === 'w') {
+        return {
+            t: 'w',
+            m: expr.matches.map(({ cond, value }) => {
+                const c = cond ? stringifyRef(cond, makeAux) : null;
+                const v = stringifyRef(value, makeAux);
+                return { c, v };
+            }),
+        }
     } else throw new Error('invalid internal repr');
 }
 
@@ -464,7 +483,9 @@ export function evalExpr (expr) {
                 if (invocations > config.maxEvalIterations) return true;
             },
         });
-    } catch {}
+    } catch (err) {
+        console.debug(err);
+    }
 
     let analysis = null;
     try {

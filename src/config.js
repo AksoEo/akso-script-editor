@@ -7,6 +7,9 @@ export default {
 
     maxEvalIterations: 256,
 
+    // width to align the left hand side at
+    lhsAlignWidth: 200,
+
     peek: {
         background: [0.2, 0.2, 0.2, 1],
     },
@@ -19,27 +22,32 @@ export default {
         paddingYS: 2,
 
         color: [0, 0, 0, 1],
+        colorH: [1, 1, 1, 1],
+        color0: [0, 0, 0, 0],
+        iconColor: [0, 0, 0, 0.7],
+        iconColor0: [0, 0, 0, 0],
 
-        ref: [1, 0.4, 0.7, 1],
+        ref: [1, 1, 1, 1],
         refOutline: [0.9, 0.3, 0.6, 1],
+        refBroken: [1, 0.3, 0.4, 1],
         refBrokenOutline: [0.3, 0, 0, 1],
-        null: [0.83, 0.23, 0.35, 1],
+        null: [1, 1, 1, 1],
         nullOutline: [0.73, 0.13, 0.25, 1],
-        bool: [0.93, 0.58, 0.15, 1],
+        bool: [1, 1, 1, 1],
         boolOutline: [0.83, 0.48, 0.05, 1],
-        number: [1, 0.83, 0, 1],
+        number: [1, 1, 1, 1],
         numberOutline: [0.9, 0.73, 0, 1],
-        string: [0.5, 0.92, 0.1, 1],
+        string: [1, 1, 1, 1],
         stringOutline: [0.4, 0.82, 0, 1],
         stringHighlight: [0.1, 0.62, 0, 1], // dropdown hilight
-        matrix: [0, 1, 0.68, 1],
+        matrix: [1, 1, 1, 1],
         matrixOutline: [0, 0.85, 0.58, 1],
-        list: [0, 0.86, 1, 1],
+        list: [1, 1, 1, 1],
         listOutline: [0, 0.76, 0.9, 1],
-        call: [1, 0.02, 0.44, 1],
+        call: [1, 1, 1, 1],
         callOutline: [0.9, 0, 0.34, 1],
         callHoverOutline: [0.8, 0, 0.24, 1],
-        func: [0.9, 0.6, 0.6, 1],
+        func: [1, 1, 1, 1],
         funcOutline: [0.8, 0.5, 0.5, 1],
 
         true: 'yes',
@@ -48,6 +56,9 @@ export default {
         functionLabel: 'function',
     },
 
+    defs: {
+        background: [1, 1, 1, 1],
+    },
     def: {
         cornerRadius: 12,
         padding: 8,
@@ -62,6 +73,10 @@ export default {
         hoverStroke: [0.2, 0.2, 0.2, 1],
         background: [0, 0, 0, 0],
         hoverBackground: [0, 0, 0, 0.2],
+    },
+
+    clipboard: {
+        title: 'Clipboard',
     },
 
     icons: {
@@ -149,7 +164,7 @@ export default {
         not: ['value'],
         xor: ['value', 'value'],
         id: ['value'],
-        cat: ['functors'],
+        cat: ['functor', 'functor'],
         map: ['morphism', 'functor'],
         flat_map: ['morphism', 'functor'],
         fold: ['morphism', 'initial', 'functor'],

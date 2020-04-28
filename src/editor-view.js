@@ -22,4 +22,8 @@ export class EditorView extends View {
     *iterSubviews () {
         yield this.canvasView;
     }
+
+    get wantsRootSize () {
+        return true;
+    }
 }

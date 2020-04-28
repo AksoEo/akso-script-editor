@@ -2,6 +2,9 @@ import PointerTracker from 'pointer-tracker';
 
 /// View root handler. Handles interfacing with the DOM and time.
 export class ViewRoot {
+    /// a stack of nodes that serve as root views. the topmost is the active one.
+    stack = [];
+
     constructor () {
         this.node = document.createElement('div');
         this.node.setAttribute('class', 'asce-editor');
@@ -68,6 +71,7 @@ export class ViewRoot {
             nodesAtPoint: this.getNodesAtPoint,
             beginInput: this.beginInput,
             beginCapture: this.beginCapture,
+            push: this.ctxPush,
         };
     }
 
@@ -86,7 +90,7 @@ export class ViewRoot {
             chosenTarget = targets[targets.length - 1]; // last target is on top due to DFS order
         }
 
-        if (chosenTarget.target.onPointerStart) {
+        if (chosenTarget && chosenTarget.target.onPointerStart) {
             chosenTarget.target.onPointerStart({
                 x: x - chosenTarget.x,
                 y: y - chosenTarget.y,
@@ -96,7 +100,7 @@ export class ViewRoot {
         }
 
         this.#trackedPointers.set(pointer.id, {
-            targets: [chosenTarget],
+            targets: [chosenTarget].filter(x => x),
         });
     };
 
@@ -128,9 +132,10 @@ export class ViewRoot {
     };
 
     getTargetsAtPoint = (x, y) => {
-        if (!this.root) return [];
+        const stackBot = this.stack[0];
+        if (!stackBot) return [];
         const targets = [];
-        this.#getNodesAtPointInner(x, y, 0, 0, this.root.layer, targets);
+        this.#getNodesAtPointInner(x, y, 0, 0, stackBot.layer, targets);
         return targets;
     };
     getNodesAtPoint = (x, y) => {
@@ -188,6 +193,7 @@ export class ViewRoot {
             const targets = this.getTargetsAtPoint(x, y);
             chosenTarget = targets[targets.length - 1]; // last target is on top due to DFS order
         }
+        if (!chosenTarget) return;
         const chosenView = chosenTarget.target;
 
         let didEnter = false;
@@ -234,40 +240,55 @@ export class ViewRoot {
         }
     };
 
-    setRootView (view) {
-        if (this.root) {
-            this.svgNode.removeChild(this.root.layer.node);
-        }
-
-        this.root = view;
-        this.svgNode.appendChild(view.layer.node);
-        view.layer.didMount(this.ctx);
-
-        this.updateRootSize();
-    }
-
     get width () {
-        return this.svgNode.width.baseVal.value;
+        return +this.svgNode.getAttribute('width') | 0;
     }
     set width (value) {
         this.node.style.width = value + 'px';
-        this.svgNode.width.baseVal.valueAsString = value + 'px';
-        this.updateRootSize();
+        this.svgNode.setAttribute('width', value);
+        this.updateRootSizes();
     }
     get height () {
-        return this.svgNode.height.baseVal.value;
+        return +this.svgNode.getAttribute('height') | 0;
     }
     set height (value) {
         this.node.style.height = value + 'px';
-        this.svgNode.height.baseVal.valueAsString = value + 'px';
-        this.updateRootSize();
+        this.svgNode.setAttribute('height', value);
+        this.updateRootSizes();
     }
 
-    updateRootSize () {
-        if (!this.root) return;
+    /// Pushes a root view.
+    push (view) {
+        this.stack.push(view);
+        this.svgNode.appendChild(view.layer.node);
+        view.layer.didMount(this.ctx);
 
-        this.root.size = [this.width, this.height];
-        this.root.needsLayout = true;
+        this.updateRootSizes();
+    }
+    pop () {
+        const view = this.stack.pop();
+        if (!view) return;
+        this.svgNode.removeChild(view.layer.node);
+        if (!view.layer.parent) view.layer.didUnmount();
+    }
+
+    ctxPush = view => {
+        const popAtSize = this.stack.length;
+        this.push(view);
+        return {
+            pop: () => {
+                while (this.stack.length > popAtSize) this.pop();
+            },
+        };
+    };
+
+    updateRootSizes () {
+        for (const item of this.stack) {
+            if (!item.wantsRootSize) continue;
+            if (item.size[0] === this.width && item.size[1] === this.height) continue;
+            item.size = [this.width, this.height];
+            item.needsLayout = true;
+        }
     }
 
     inputOriginal = null;
@@ -309,7 +330,7 @@ export class ViewRoot {
     };
     endCapture = () => {
         this.capturedInputTarget = null;
-    }
+    };
 
     // animation loop handling
     animationLoopId = 0;

@@ -76,6 +76,7 @@ export class Layer extends BaseLayer {
         this.owner = owner;
         this.node = document.createElementNS(svgNS, 'g');
         this.node.setAttribute('class', 'asce-layer');
+        this.node.style.pointerEvents = 'none';
         this.fillNode = document.createElementNS(svgNS, 'rect');
         this.fillNode.setAttribute('class', 'asce-layer-fill');
         this.node.appendChild(this.fillNode);
@@ -169,6 +170,8 @@ export class Layer extends BaseLayer {
         for (const item of allLayers) {
             if (!this.#sublayers.has(item)) this.addSublayer(item);
         }
+
+        // TODO: sync order
     }
 
     addSublayer (layer) {

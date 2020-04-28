@@ -324,13 +324,13 @@ const EXPR_VIEW_IMPLS = {
     r: {
         init () {
             this.layer.cornerRadius = config.cornerRadius;
-            this.layer.background = config.primitives.ref;
             this.layer.strokeWidth = config.primitives.outlineWeight;
             this.textLayer = new TextLayer();
             this.textLayer.font = config.identFont;
+            this.textLayer.color = config.primitives.color;
 
             this.iconLayer = new PathLayer();
-            this.iconLayer.fill = [0, 0, 0, 0.7];
+            this.iconLayer.fill = config.primitives.iconColor;
         },
         deinit () {
             delete this.textLayer;
@@ -355,11 +355,12 @@ const EXPR_VIEW_IMPLS = {
         layout () {
             this.textLayer.text = this.expr.name;
             if (!this.isDef && !this.expr.name.startsWith('@') && !this.expr.refNode) {
-                // TODO: mark unresolved
                 this.iconLayer.path = config.icons.refBroken;
+                this.layer.background = config.primitives.refBroken;
                 this.layer.stroke = config.primitives.refBrokenOutline;
             } else {
                 this.iconLayer.path = config.icons.ref;
+                this.layer.background = config.primitives.ref;
                 this.layer.stroke = config.primitives.refOutline;
             }
 
@@ -390,11 +391,12 @@ const EXPR_VIEW_IMPLS = {
 
             this.textLayer = new TextLayer();
             this.textLayer.font = config.identFont;
+            this.textLayer.color = config.primitives.color;
             this.textLayer.text = 'null';
 
             this.iconLayer = new PathLayer();
             this.iconLayer.path = config.icons.null;
-            this.iconLayer.fill = [0, 0, 0, 0.7];
+            this.iconLayer.fill = config.primitives.iconColor;
         },
         deinit () {
             delete this.textLayer;
@@ -421,10 +423,11 @@ const EXPR_VIEW_IMPLS = {
             this.layer.strokeWidth = config.primitives.outlineWeight;
             this.textLayer = new TextLayer();
             this.textLayer.font = config.identFont;
+            this.textLayer.color = config.primitives.color;
 
             this.iconLayer = new PathLayer();
             this.iconLayer.path = config.icons.bool;
-            this.iconLayer.fill = [0, 0, 0, 0.7];
+            this.iconLayer.fill = config.primitives.iconColor;
         },
         deinit () {
             delete this.textLayer;
@@ -459,10 +462,11 @@ const EXPR_VIEW_IMPLS = {
             this.layer.strokeWidth = config.primitives.outlineWeight;
             this.textLayer = new TextLayer();
             this.textLayer.font = config.identFont;
+            this.textLayer.color = config.primitives.color;
 
             this.iconLayer = new PathLayer();
             this.iconLayer.path = config.icons.number;
-            this.iconLayer.fill = [0, 0, 0, 0.7];
+            this.iconLayer.fill = config.primitives.iconColor;
         },
         deinit () {
             delete this.textLayer;
@@ -506,10 +510,11 @@ const EXPR_VIEW_IMPLS = {
             this.layer.strokeWidth = config.primitives.outlineWeight;
             this.textLayer = new TextLayer();
             this.textLayer.font = config.identFont;
+            this.textLayer.color = config.primitives.color;
 
             this.iconLayer = new PathLayer();
             this.iconLayer.path = config.icons.string;
-            this.iconLayer.fill = [0, 0, 0, 0.7];
+            this.iconLayer.fill = config.primitives.iconColor;
         },
         deinit () {
             delete this.textLayer;
@@ -550,10 +555,11 @@ const EXPR_VIEW_IMPLS = {
             this.layer.strokeWidth = config.primitives.outlineWeight;
             this.textLayer = new TextLayer();
             this.textLayer.font = config.identFont;
+            this.textLayer.color = config.primitives.color;
 
             this.iconLayer = new PathLayer();
             this.iconLayer.path = config.icons.matrix;
-            this.iconLayer.fill = [0, 0, 0, 0.7];
+            this.iconLayer.fill = config.primitives.iconColor;
         },
         deinit () {
             delete this.textLayer;
@@ -567,7 +573,7 @@ const EXPR_VIEW_IMPLS = {
             const stringify = value => {
                 if (Array.isArray(value)) return '[' + value.map(stringify).join(', ') + ']';
                 if (typeof value === 'function') return '(->)';
-                return value.toString();
+                return '' + value;
             };
             this.textLayer.text = stringify(this.expr.value);
 
@@ -594,6 +600,7 @@ const EXPR_VIEW_IMPLS = {
             this.label.font = config.labelFont;
             this.label.text = config.primitives.listLabel;
             this.label.baseline = 'top';
+            this.label.color = config.primitives.color;
 
             this.slots = [];
         },
@@ -663,6 +670,7 @@ const EXPR_VIEW_IMPLS = {
 
             this.nameLayer = new TextLayer();
             this.nameLayer.font = config.identFont;
+            this.nameLayer.color = config.primitives.color;
             this.argSlots = [];
             this.argLabels = [];
 
@@ -715,6 +723,7 @@ const EXPR_VIEW_IMPLS = {
                 label.font = config.callArgFont;
                 label.baseline = 'top';
                 label.align = 'center';
+                label.color = config.primitives.color;
 
                 this.argSlots.push(slot);
                 this.argLabels.push(label);
@@ -782,6 +791,7 @@ const EXPR_VIEW_IMPLS = {
         },
         onPointerEnter () {
             const result = evalExpr(this.expr);
+            if (!result) return;
 
             const t = new Transaction(1, 0.2);
             this.layer.strokeWidth = config.primitives.hoverOutlineWeight;
@@ -811,6 +821,7 @@ const EXPR_VIEW_IMPLS = {
             this.layer.strokeWidth = config.primitives.outlineWeight;
             this.textLayer = new TextLayer();
             this.textLayer.font = config.identFont;
+            this.textLayer.color = config.primitives.color;
         },
         deinit () {
             delete this.textLayer;
@@ -824,6 +835,30 @@ const EXPR_VIEW_IMPLS = {
         },
         tapAction () {
             // TODO: edit function
+        },
+        *iterSublayers () {
+            yield this.textLayer;
+        },
+    },
+    w: {
+        init () {
+            this.layer.cornerRadius = config.cornerRadius;
+            this.layer.background = config.primitives.func;
+            this.layer.stroke = config.primitives.funcOutline;
+            this.layer.strokeWidth = config.primitives.outlineWeight;
+            this.textLayer = new TextLayer();
+            this.textLayer.font = config.identFont;
+            this.textLayer.color = config.primitives.color;
+        },
+        deinit () {
+            delete this.textLayer;
+        },
+        layout () {
+            this.textLayer.text = 'SWITCH GOES HERE';
+
+            const textSize = this.textLayer.getNaturalSize();
+            this.layer.size = [textSize[0] + 16, textSize[1] + 4];
+            this.textLayer.position = [8, this.layer.size[1] / 2];
         },
         *iterSublayers () {
             yield this.textLayer;
