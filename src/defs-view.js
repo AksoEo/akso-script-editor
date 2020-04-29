@@ -16,7 +16,6 @@ export class DefsView extends View {
         super();
 
         this.layer.background = config.defs.background;
-        this.layer.clipContents = true;
 
         this.scrollAnchor = new DefsAnchorView();
         this.defs = defs;

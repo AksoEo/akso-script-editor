@@ -2,7 +2,7 @@ import { View } from './view';
 import { ExprView } from './expr-view';
 import { Layer, TextLayer, Transaction } from './layer';
 import { getProtoView } from './proto-pool';
-import { makeStdRefs } from './model';
+import { makeStdRefs, createContext } from './model';
 import config from './config';
 
 export class Library extends View {
@@ -52,21 +52,21 @@ export class Library extends View {
     }
 
     createTab (tab) {
-        const ctx = this.defs.defs.ctx;
         if (tab.id === 'primitives') {
             tab.itemList.items = [
-                new ExprFactory({ ctx, type: 'u' }),
-                new ExprFactory({ ctx, type: 'b', value: true }),
-                new ExprFactory({ ctx, type: 'n', value: 0 }),
-                new ExprFactory({ ctx, type: 's', value: '' }),
-                new ExprFactory({ ctx, type: 'm', value: [] }),
-                new ExprFactory({ ctx, type: 'r', name: '' }),
-                new ExprFactory({ ctx, type: 'f', params: [], body: {} }),
-                new ExprFactory({
+                new ExprFactory(this, ctx => ({ ctx, type: 'u' })),
+                new ExprFactory(this, ctx => ({ ctx, type: 'b', value: true })),
+                new ExprFactory(this, ctx => ({ ctx, type: 'n', value: 0 })),
+                new ExprFactory(this, ctx => ({ ctx, type: 's', value: '' })),
+                new ExprFactory(this, ctx => ({ ctx, type: 'm', value: [] })),
+                new ExprFactory(this, ctx => ({ ctx, type: 'r', name: '' })),
+                new ExprFactory(this, ctx => ({ ctx, type: 'f', params: [], body: {
                     ctx,
-                    type: 'w',
-                    matches: [],
-                }),
+                    type: 'd',
+                    defs: new Set(),
+                    floatingExpr: new Set(),
+                } })),
+                new ExprFactory(this, ctx => ({ ctx, type: 'w', matches: [] })),
             ];
             tab.itemList.needsLayout = true;
         } else if (tab.id === 'stdlib') {
@@ -75,17 +75,12 @@ export class Library extends View {
             for (const categoryName in config.stdlibCategories) {
                 const category = config.stdlibCategories[categoryName];
                 for (const id of category) {
-                    tab.itemList.items.push(new ExprFactory({
+                    tab.itemList.items.push(new ExprFactory(this, ctx => ({
                         ctx,
                         type: 'c',
-                        func: {
-                            ctx,
-                            type: 'r',
-                            name: id,
-                            refNode: stdRefs.get(id),
-                        },
+                        func: { ctx, type: 'r', name: id, refNode: stdRefs.get(id) },
                         args: [],
-                    }));
+                    })));
                 }
             }
             tab.itemList.needsLayout = true;
@@ -280,16 +275,61 @@ class ItemList extends View {
 }
 
 class ExprFactory extends View {
-    constructor (expr) {
+    constructor (lib, makeExpr) {
         super();
-        this.expr = expr;
+        this.lib = lib;
+        this.makeExpr = makeExpr;
+        this.exprCtx = createContext();
+        this.exprCtx.onMutation(() => {
+            this.needsLayout = true;
+        });
+        this.expr = makeExpr(this.exprCtx);
     }
 
     layout () {
         super.layout();
         const exprView = getProtoView(this.expr, ExprView);
+        exprView.noInteraction = true;
+        exprView.decorationOnly = true;
         exprView.layout();
         this.size = exprView.size;
+    }
+
+    #dragStartPos = [0, 0];
+    #createdDragRef = null;
+
+    onPointerStart ({ absX, absY }) {
+        this.#dragStartPos = [absX, absY];
+        this.#createdDragRef = false;
+    }
+    onPointerDrag ({ absX, absY }) {
+        if (this.#createdDragRef) {
+            this.lib.defs.dragController.moveExprDrag(absX, absY);
+        } else {
+            const distance = Math.hypot(absX - this.#dragStartPos[0], absY - this.#dragStartPos[1]);
+            if (distance > 6) {
+                const expr = this.makeExpr(this.lib.defs.defs.ctx);
+                this.#createdDragRef = expr;
+                const exprView = getProtoView(expr, ExprView);
+                exprView.dragController = this.lib.defs.dragController;
+                exprView.decorationOnly = true;
+                this.lib.defs.addFloatingExpr(expr);
+                const defsPos = this.lib.defs.absolutePosition;
+                const ownPos = this.absolutePosition;
+                exprView.position = [ownPos[0] - defsPos[0], ownPos[1] - defsPos[1]];
+
+                const t = new Transaction(1, 0.3);
+                this.lib.defs.dragController.beginExprDrag(expr, absX, absY);
+                t.commitAfterLayout(this.ctx);
+            }
+        }
+    }
+    onPointerEnd ({ absX, absY }) {
+        if (this.#createdDragRef) {
+            const exprView = getProtoView(this.#createdDragRef, ExprView);
+            exprView.decorationOnly = false;
+            this.lib.defs.dragController.endExprDrag();
+        }
     }
 
     *iterSubviews () {
