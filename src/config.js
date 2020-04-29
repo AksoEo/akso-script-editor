@@ -212,7 +212,7 @@ export default {
         or: '∨',
         not: '¬',
         xor: '⊕',
-        id: 'identity',
+        id: 'copy',
         cat: 'concatenate',
         map: 'map',
         flat_map: 'flat map',
