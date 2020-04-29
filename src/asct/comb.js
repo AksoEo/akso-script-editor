@@ -80,11 +80,21 @@ export const many = (parser) => str => {
     const items = [];
     while (true) {
         try {
-            items.push(parser(str));
+            const s = str.clone();
+            items.push(parser(s));
+            str.copyFrom(s);
         } catch (err) {
             str.addErrorToCurrentPos(err);
             break;
         }
     }
     return items;
+};
+export const not = (notParser, parser, desc = 'token') => str => {
+    try {
+        notParser(str.clone());
+        throw new Error(`unexpected ${desc}`);
+    } catch {
+        return parser(str);
+    }
 };

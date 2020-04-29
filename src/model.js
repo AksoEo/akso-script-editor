@@ -219,7 +219,8 @@ function stringifyRef (expr, makeAux) {
 function toRawExpr (expr, makeAux) {
     if (!expr) return { t: 'u' };
     if (expr.type === 'r') {
-        return { t: 'c', f: expr.name };
+        // we can't call directly in case it's a function, so we pass it through id
+        return { t: 'c', f: 'id', a: [stringifyRef(expr, makeAux)] };
     } else if (expr.type === 'u') {
         return { t: 'u' };
     } else if (expr.type === 'b') {

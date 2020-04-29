@@ -5,6 +5,7 @@ import {
     match,
     map,
     many,
+    not,
     EOFError,
 } from './comb';
 
@@ -15,6 +16,7 @@ import {
     StringToken,
     IdentToken,
     InfixToken,
+    BracketsToken,
     BracesToken,
     ParensToken,
     DelimToken,
@@ -115,7 +117,7 @@ class ParseError {
 
 const group = (gclass, inner) => tok => {
     const node = tok.peek();
-    if (!(node instanceof gclass)) throw new Error(`expected ${gclass.name}`);
+    if (!(node instanceof gclass)) throw new Error(`unexpected ${node}, expected ${gclass.name}`);
     tok.enter();
     const i = inner(tok);
     tok.exitAssertingEnd();
@@ -144,45 +146,64 @@ const callArgsInner = map(cat(
 ), ([a,, b]) => a.concat(b));
 const callArgs = group(ParensToken, callArgsInner);
 const callExpr = map(cat(
-    match(x => x instanceof IdentToken && !(x instanceof InfixToken)),
+    match(x => x instanceof IdentToken && !(x instanceof InfixToken), 'callee identifier'),
     anyws,
     opt(callArgs),
 ), ([a,, c]) => c.length ? ({ type: 'c', func: { type: 'r', name: a.ident }, args: c[0] }) : ({
-    type: 'c',
-    func: { type: 'r', name: 'id' },
-    args: [{ type: 'r', name: a.ident }],
+    type: 'r',
+    name: a.ident,
 }));
 
 const groupExpr = group(ParensToken, expr);
 
-const arrow = match(x => x instanceof InfixToken && x.ident === '=>');
-
-const switchIdent = match(x => x instanceof IdentToken && !x.isRaw && x.ident === 'switch');
-const lastSwitchCaseWildcard = map(match(x => x instanceof IdentToken && !x.isRaw && x.ident === '_'), () => null);
-const lastSwitchCase = oneOf(lastSwitchCaseWildcard, expr);
-const switchCases = cat(
-    many(map(cat(anyws, expr, anyws, arrow, anyws, expr, anyws, delim),
-        ([, a,,, b]) => ({ cond: a, value: b }))),
-    opt(map(cat(anyws, lastSwitchCase, anyws, arrow, anyws, expr),
-        ([, a,,, b]) => ({ cond: a, value: b }))),
+const matrixInner = map(cat(
+    many(map(cat(anyws, expr, anyws, delim), a => a[1])),
+    opt(map(cat(anyws, expr), a => a[1])),
     anyws,
-);
+), ([a, b]) => a.concat(b));
+const matrixExpr = map(group(BracketsToken, matrixInner), items => {
+    const MATRIX_TYPES = 'ubnsm';
+    let isPure = true;
+    for (const item of items) {
+        if (!MATRIX_TYPES.includes(item.type)) {
+            isPure = false;
+        }
+    }
+    if (isPure) return { type: 'm', value: items };
+    else return { type: 'l', items };
+});
+
+const arrow = match(x => x instanceof InfixToken && x.ident === '=>', '=>');
+const equals = match(x => x instanceof InfixToken && x.ident === '=', '=');
+
+const switchIdent = match(x => x instanceof IdentToken && !x.isRaw && x.ident === 'switch', 'switch keyword');
+const lastSwitchCaseWildcard = map(match(x => x instanceof IdentToken && !x.isRaw && x.ident === '_', 'wildcard case'), () => null);
+const lastSwitchCase = oneOf(lastSwitchCaseWildcard, expr);
+const notLastSwitchCase = not(lastSwitchCaseWildcard, expr, 'wildcard case');
+const switchCases = map(cat(
+    many(map(cat(anyws, notLastSwitchCase, anyws, equals, anyws, expr, anyws, delim),
+        ([, a,,,, b]) => ({ cond: a, value: b }))),
+    opt(map(cat(anyws, lastSwitchCase, anyws, equals, anyws, expr),
+        ([, a,,,, b]) => ({ cond: a, value: b }))),
+    anyws,
+    opt(delim),
+), ([a, b]) => a.concat(b));
 const switchContents = group(BracesToken, switchCases);
 const switchExpr = map(cat(switchIdent, anyws, switchContents), ([,, m]) => ({
     type: 'w',
     matches: m,
 }));
 
-const closureArg = map(match(x => x instanceof IdentToken && !(x instanceof InfixToken)), x => x.ident);
+const closureArg = map(match(x => x instanceof IdentToken && !(x instanceof InfixToken), 'argument name'), x => x.ident);
 const closureArgsInner = map(cat(
     many(map(cat(anyws, closureArg, anyws, delim), ([, a]) => a)),
     opt(map(cat(anyws, closureArg), ([, a]) => a)),
     anyws,
 ), ([a, b]) => a.concat(b));
-const closureArgs = group(ParensToken, closureArgsInner);
-const closureWhereKey = match(x => x instanceof IdentToken && !x.isRaw && x.ident === 'where');
-const closureWhere = opt(closureWhereKey, anyws, group(BracesToken, program));
-const closureBody = map(cat(expr, nbws, closureWhere), ([e,, w]) => {
+const closureArgs = oneOf(map(closureArg, arg => [arg]), group(ParensToken, closureArgsInner));
+const closureWhereKey = match(x => x instanceof IdentToken && !x.isRaw && x.ident === 'where', 'where keyword');
+const closureWhere = map(opt(map(cat(closureWhereKey, anyws, group(BracesToken, program)), a => a[2])), a => a[0]);
+const closureBody = map(cat(expr, anyws, closureWhere), ([e,, w]) => {
     const body = {
         type: 'd',
         defs: new Set(),
@@ -195,13 +216,13 @@ const closureBody = map(cat(expr, nbws, closureWhere), ([e,, w]) => {
     if (w) for (const d of w.defs) body.defs.add(d);
     return body;
 });
-const closureExpr = map(cat(closureArgs, anyws, arrow, anyws, closureBody), ([p,,, b]) => ({
+const closureExpr = map(cat(closureArgs, nbws, arrow, anyws, closureBody), ([p,,,, b]) => ({
     type: 'f',
     params: p,
     body: b,
 }));
 
-const minus = match(x => x instanceof InfixToken && x.ident === '-');
+const minus = match(x => x instanceof InfixToken && x.ident === '-', 'minus sign');
 const unaryMinusExpr = map(cat(minus, nbws, nonInfixExpr), ([,, e]) => ({
     type: 'c',
     func: { type: 'r', name: '-' },
@@ -211,17 +232,20 @@ const unaryMinusExpr = map(cat(minus, nbws, nonInfixExpr), ([,, e]) => ({
 const _nonInfixExpr = oneOf(
     unaryMinusExpr,
     primitive,
-    callExpr,
+    matrixExpr,
     switchExpr,
     closureExpr,
     groupExpr,
+    callExpr,
 );
 function nonInfixExpr (tok) { // for hoisting
     return _nonInfixExpr(tok);
 }
 
+const isInfixOp = x => x instanceof InfixToken && x.ident !== '=' && x.ident !== '=>';
+
 const infixExpr = map(
-    cat(nonInfixExpr, anyws, match(x => x instanceof InfixToken), anyws, expr),
+    cat(nonInfixExpr, anyws, match(isInfixOp, 'infix operator'), anyws, expr),
     ([a,, o,, b]) => ({
         type: 'c',
         func: { type: 'r', name: o.ident },
@@ -242,8 +266,7 @@ function expr (tok) { // for hoisting
     return _expr(tok);
 }
 
-const equals = match(x => x instanceof InfixToken && x.ident === '=');
-const defName = match(x => x instanceof IdentToken);
+const defName = match(x => x instanceof IdentToken, 'definition name');
 const definition = map(cat(defName, anyws, equals, anyws, expr), ([n,,,, e]) => ({
     type: 'ds',
     name: n.ident,

@@ -83,12 +83,12 @@ export class IdentToken extends Token {
         this.isRaw = isRaw;
     }
     toString () {
-        return `Ident(${this.ident}${this.isRaw ? ' (raw)' : ''})`;
+        return `ident(${this.ident}${this.isRaw ? ' (raw)' : ''})`;
     }
 }
 export class InfixToken extends IdentToken {
     toString () {
-        return `InfixIdent(${this.ident})`;
+        return `infix(${this.ident})`;
     }
 }
 export class NumberToken extends Token {
@@ -98,7 +98,7 @@ export class NumberToken extends Token {
         this.frac = frac;
     }
     toString () {
-        return `Number(${this.int}.${this.frac})`;
+        return `number(${this.int}.${this.frac})`;
     }
 }
 export class BoolToken extends Token {
@@ -107,23 +107,23 @@ export class BoolToken extends Token {
         this.value = value;
     }
     toString () {
-        return `Bool(${this.value})`;
+        return `bool(${this.value})`;
     }
 }
 export class NullToken extends Token {
     toString () {
-        return `Null`;
+        return `null`;
     }
 }
 export class WhitespaceToken extends Token {}
 export class SpaceToken extends WhitespaceToken {
     toString () {
-        return `NonBreakingWhitespace`;
+        return `·`;
     }
 }
 export class BreakToken extends WhitespaceToken {
     toString () {
-        return `BreakingWhitespace`;
+        return `\\n`;
     }
 }
 export class StringToken extends Token {
@@ -132,12 +132,12 @@ export class StringToken extends Token {
         this.contents = contents;
     }
     toString () {
-        return `String(${this.contents.substr(0, 50)})`;
+        return `"${this.contents.substr(0, 50)}"`;
     }
 }
 export class DelimToken extends Token {
     toString () {
-        return `Delimiter`;
+        return `,`;
     }
 }
 export class ContainerToken extends Token {
@@ -148,17 +148,17 @@ export class ContainerToken extends Token {
 }
 export class BracketsToken extends ContainerToken {
     toString () {
-        return `Brackets(${this.contents.join(', ')})`;
+        return `[ ${this.contents.join('')} ]`;
     }
 }
 export class BracesToken extends ContainerToken {
     toString () {
-        return `Braces(${this.contents.join(', ')})`;
+        return `{ ${this.contents.join('')} }`;
     }
 }
 export class ParensToken extends ContainerToken {
     toString () {
-        return `Parens(${this.contents.join(', ')})`;
+        return `( ${this.contents.join('')} )`;
     }
 }
 
@@ -171,8 +171,9 @@ const rawIdentInner = (str) => {
         str.next();
     }
     if (str.next() !== '"') throw new LexError(`expected " at beginning of raw ident`);
-    const closeTag = '"' + '#'.repeat(hashes);
+    const closeTag = '"' + '#'.repeat(hashes + 1);
     const contents = takeUntil(tag(closeTag, 'raw ident close tag'))(str);
+    for (let i = 0; i < closeTag.length; i++) str.next();
     return contents;
 };
 const rawIdent = map(cat(tag('r#', 'raw ident start tag'), rawIdentInner), (a) => new IdentToken(a[1], true));
