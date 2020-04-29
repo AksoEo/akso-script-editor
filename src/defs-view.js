@@ -88,6 +88,8 @@ export class DefsView extends View {
         this.trash.layout();
         t.commit();
 
+        this.layer.clipContents = this.useGraphView;
+
         // perform layout on all defs so we have their sizes
         for (const item of this.defs.defs) {
             const itemView = getProtoView(item, DefView);
@@ -162,7 +164,7 @@ export class DefsView extends View {
                 const minX = 0;
                 const maxX = Math.max(0, maxWidth - this.size[0]);
                 const minY = 0;
-                const maxY = Math.max(0, y - this.size[1] + this.trash.size[1]);
+                const maxY = Math.max(0, y - this.size[1]);
                 this.scroll[0] = Math.max(minX, Math.min(this.scroll[0], maxX));
                 this.scroll[1] = Math.max(minY, Math.min(this.scroll[1], maxY));
             }
@@ -676,7 +678,7 @@ class DragController {
         this.#draggingNode = expr;
         this.#currentSlot = null;
         this.#onlyY = false;
-        if (!this.defs.useGraphView) this.defs.showTrash = true;
+        this.defs.showTrash = true;
         const exprView = getProtoView(expr, ExprView);
 
         if (expr.parent) {

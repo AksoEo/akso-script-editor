@@ -33,6 +33,21 @@ export class Library extends View {
         }
     }
 
+    open () {
+        if (this.pseudoSelected) this.toggleSelected(this.pseudoSelected);
+    }
+
+    get isOpen () {
+        return !!this.selected;
+    }
+
+    close () {
+        if (!this.selected) return;
+        this.toggleSelected(this.selected);
+        this.needsLayout = true;
+        this.flushSubviews();
+    }
+
     selected = null;
     pseudoSelected = null;
 
@@ -40,6 +55,7 @@ export class Library extends View {
         if (this.selected === item) {
             this.selected = null;
         } else {
+            if (this.defs.useGraphView) return;
             this.selected = item;
             this.pseudoSelected = this.selected;
         }

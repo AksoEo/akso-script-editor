@@ -85,6 +85,16 @@ export default {
 
     toolbar: {
         background: [0.7, 0.7, 0.7, 1],
+        button: {
+            background: [0.8, 0.8, 0.8, 1],
+            activeBackground: [0.5, 0.5, 0.5, 1],
+            outlineWidth: 2,
+            outline: [1, 1, 1, 0],
+            hoverOutline: [1, 1, 1, 1],
+            activeOutline: [0, 0, 0, 1],
+            paddingX: 7,
+            paddingY: 3,
+        },
     },
 
     library: {
@@ -265,8 +275,8 @@ export default {
         max: ['functor'],
         avg: ['functor'],
         med: ['functor'],
-        date_sub: ['unit', 'minuend', 'subtrahend'],
-        date_add: ['unit', 'augend', 'factor'],
+        date_sub: ['result unit', 'minuend', 'subtrahend'],
+        date_add: ['factor unit', 'augend', 'factor'],
         date_fmt: ['date'],
         datetime_fmt: ['datetime'],
         currency_fmt: ['currency', 'value'],

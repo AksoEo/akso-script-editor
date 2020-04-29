@@ -8,6 +8,7 @@ export class EditorView extends View {
 
     layout () {
         super.layout();
+        this.toolbar.canvas = this.canvasView;
         this.toolbar.size = [this.size[0], 32];
         this.toolbar.layout();
         this.canvasView.position = [0, this.toolbar.size[1]];
