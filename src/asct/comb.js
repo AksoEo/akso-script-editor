@@ -93,8 +93,8 @@ export const many = (parser) => str => {
 export const not = (notParser, parser, desc = 'token') => str => {
     try {
         notParser(str.clone());
-        throw new Error(`unexpected ${desc}`);
     } catch {
         return parser(str);
     }
+    throw new Error(`unexpected ${desc}`);
 };

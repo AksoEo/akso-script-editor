@@ -169,11 +169,12 @@ const matrixExpr = map(group(BracketsToken, matrixInner), items => {
             isPure = false;
         }
     }
-    if (isPure) return { type: 'm', value: items };
+    if (isPure) return { type: 'm', value: items.map(item => item.value) };
     else return { type: 'l', items };
 });
 
-const arrow = match(x => x instanceof InfixToken && x.ident === '=>', '=>');
+const arrow = match(x => x instanceof InfixToken && x.ident === '->', '->');
+const fatArrow = match(x => x instanceof InfixToken && x.ident === '=>', '=>');
 const equals = match(x => x instanceof InfixToken && x.ident === '=', '=');
 
 const switchIdent = match(x => x instanceof IdentToken && !x.isRaw && x.ident === 'switch', 'switch keyword');
@@ -181,12 +182,13 @@ const lastSwitchCaseWildcard = map(match(x => x instanceof IdentToken && !x.isRa
 const lastSwitchCase = oneOf(lastSwitchCaseWildcard, expr);
 const notLastSwitchCase = not(lastSwitchCaseWildcard, expr, 'wildcard case');
 const switchCases = map(cat(
-    many(map(cat(anyws, notLastSwitchCase, anyws, equals, anyws, expr, anyws, delim),
+    many(map(cat(anyws, notLastSwitchCase, anyws, fatArrow, anyws, expr, anyws, delim),
         ([, a,,,, b]) => ({ cond: a, value: b }))),
-    opt(map(cat(anyws, lastSwitchCase, anyws, equals, anyws, expr),
+    opt(map(cat(anyws, lastSwitchCase, anyws, fatArrow, anyws, expr),
         ([, a,,,, b]) => ({ cond: a, value: b }))),
     anyws,
     opt(delim),
+    anyws,
 ), ([a, b]) => a.concat(b));
 const switchContents = group(BracesToken, switchCases);
 const switchExpr = map(cat(switchIdent, anyws, switchContents), ([,, m]) => ({
@@ -242,20 +244,89 @@ function nonInfixExpr (tok) { // for hoisting
     return _nonInfixExpr(tok);
 }
 
-const isInfixOp = x => x instanceof InfixToken && x.ident !== '=' && x.ident !== '=>';
+const isInfixOp = x => x instanceof InfixToken && x.ident !== '=' && x.ident !== '->' && x.ident !== '=>';
+
+const IS_INFIX = Symbol();
+const IS_INFIX_OP = Symbol();
+
+const mkInfix = a => {
+    Object.defineProperty(a, IS_INFIX, {
+        value: true,
+        enumerable: false,
+    });
+    return a;
+};
+const mkInfixOp = a => {
+    Object.defineProperty(a, IS_INFIX_OP, {
+        value: true,
+        enumerable: false,
+    });
+    return a;
+};
 
 const infixExpr = map(
     cat(nonInfixExpr, anyws, match(isInfixOp, 'infix operator'), anyws, expr),
-    ([a,, o,, b]) => ({
+    ([a,, o,, b]) => mkInfix({
         type: 'c',
-        func: { type: 'r', name: o.ident },
+        func: mkInfixOp({ type: 'r', name: o.ident }),
         args: [a, b],
+        [IS_INFIX]: true,
     }),
 );
 
+const OP_PREC = [
+    ['||'],
+    ['&&'],
+    ['==', '!='],
+    ['>=', '<=', '>', '<'],
+    ['|'],
+    ['&'],
+    ['<<', '>>'],
+    ['+', '-'],
+    ['*', '/', '%'],
+    ['^'],
+];
+const KNOWN_PREC_OPS = OP_PREC.flatMap(x => x);
+
 function fixPrec (infixExpr) {
-    // TODO
-    return infixExpr;
+    return tok => {
+        const expr = infixExpr(tok);
+
+        const parts = [];
+        const additionalOps = [];
+        const flatten = e => {
+            if (e[IS_INFIX]) {
+                flatten(e.args[0]);
+                parts.push(e.func);
+                if (!KNOWN_PREC_OPS.includes(e.func.name)) additionalOps.push(e.func.name);
+                flatten(e.args[1]);
+            } else parts.push(e);
+        };
+        flatten(expr);
+
+        const precLevels = OP_PREC.concat([additionalOps]).reverse();
+        for (const ops of precLevels) {
+            let i = 0;
+            while (i < parts.length) {
+                const part = parts[i];
+                if (part[IS_INFIX_OP] && ops.includes(part.name)) {
+                    const pLeft = parts[i - 1];
+                    const pRight = parts[i + 1];
+                    if (!pLeft || !pRight) throw new Error(`error during precedence sort: lonely operator`);
+                    i--;
+                    parts.splice(i, 3, mkInfix({
+                        type: 'c',
+                        func: part,
+                        args: [pLeft, pRight],
+                    }));
+                }
+                i++;
+            }
+        }
+
+        if (parts.length !== 1) throw new Error(`error during precedence sort: incomplete reduction`);
+        return parts[0];
+    };
 }
 
 const _expr = oneOf(

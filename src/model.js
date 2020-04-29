@@ -15,6 +15,7 @@ import config from './config';
 //!    - Expr.Call: { type: 'c', func: Expr, args: [Expr] }
 //!        - prefer Expr.Ref for func with a valid function reference
 //!    - Expr.FnDef: { type: 'f', params: [string], body: Defs }
+//!    - Expr.Switch: { type: 'w', matches: [{ cond: Expr?, value: Expr }] }
 //!
 //! ## Additional fields on all objects
 //! - parent: object or nullish
