@@ -302,33 +302,46 @@ class ExprFactory extends View {
         this.#dragStartPos = [absX, absY];
         this.#createdDragRef = false;
     }
+
+    createInstance () {
+        const expr = this.makeExpr(this.lib.defs.defs.ctx);
+        const exprView = getProtoView(expr, ExprView);
+        exprView.dragController = this.lib.defs.dragController;
+        exprView.decorationOnly = true;
+        this.lib.defs.addFloatingExpr(expr);
+        const defsPos = this.lib.defs.absolutePosition;
+        const ownPos = this.absolutePosition;
+        exprView.position = [ownPos[0] - defsPos[0], ownPos[1] - defsPos[1]];
+        return expr;
+    }
+
     onPointerDrag ({ absX, absY }) {
         if (this.#createdDragRef) {
             this.lib.defs.dragController.moveExprDrag(absX, absY);
         } else {
             const distance = Math.hypot(absX - this.#dragStartPos[0], absY - this.#dragStartPos[1]);
             if (distance > 6) {
-                const expr = this.makeExpr(this.lib.defs.defs.ctx);
-                this.#createdDragRef = expr;
-                const exprView = getProtoView(expr, ExprView);
-                exprView.dragController = this.lib.defs.dragController;
-                exprView.decorationOnly = true;
-                this.lib.defs.addFloatingExpr(expr);
-                const defsPos = this.lib.defs.absolutePosition;
-                const ownPos = this.absolutePosition;
-                exprView.position = [ownPos[0] - defsPos[0], ownPos[1] - defsPos[1]];
-
+                this.#createdDragRef = this.createInstance();
                 const t = new Transaction(1, 0.3);
-                this.lib.defs.dragController.beginExprDrag(expr, absX, absY);
+                this.lib.defs.dragController.beginExprDrag(this.#createdDragRef, absX, absY);
                 t.commitAfterLayout(this.ctx);
             }
         }
     }
-    onPointerEnd ({ absX, absY }) {
+
+    onPointerEnd () {
         if (this.#createdDragRef) {
             const exprView = getProtoView(this.#createdDragRef, ExprView);
             exprView.decorationOnly = false;
             this.lib.defs.dragController.endExprDrag();
+        } else {
+            const expr = this.createInstance();
+            const exprView = getProtoView(expr, ExprView);
+            exprView.decorationOnly = false;
+
+            const t = new Transaction(0.8, 0.5);
+            exprView.position = [16, 16];
+            t.commit();
         }
     }
 
