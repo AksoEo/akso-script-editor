@@ -59,16 +59,34 @@ export class DefsView extends View {
     layout () {
         super.layout();
 
-        this.trash.size = [
-            186,
-            Math.min(this.size[1] * 0.5, 100),
-        ];
-        this.trash.position = [
-            8,
-            this.showTrash
-                ? this.size[1] - this.trash.size[1] - 8
-                : this.size[1],
-        ];
+        let t;
+        if (this.leftTrash !== this._wasLeftTrash) t = new Transaction(1, 0);
+        else t = new Transaction(1, 0.3);
+        this._wasLeftTrash = this.leftTrash;
+        if (this.leftTrash) {
+            this.trash.size = [
+                this.leftTrashWidth,
+                this.size[1],
+            ];
+            this.trash.position = [-this.trash.size[0], 0];
+        } else {
+            this.trash.size = [
+                186,
+                Math.min(this.size[1] * 0.5, 100),
+            ];
+            this.trash.position = [
+                8,
+                this.showTrash
+                    ? this.size[1] - this.trash.size[1] - 8
+                    : this.size[1],
+            ];
+            this.trash.layer.opacity = 1;
+        }
+        this.trash.isLeftTrash = this.leftTrash;
+        this.trash.shouldShow = this.showTrash;
+        this.trash.decorationOnly = !this.showTrash;
+        this.trash.layout();
+        t.commit();
 
         // perform layout on all defs so we have their sizes
         for (const item of this.defs.defs) {
@@ -155,8 +173,6 @@ export class DefsView extends View {
         this.scrollAnchor.arrows = this.#arrows;
         this.scrollAnchor.flushSubviews();
         this.scrollAnchor.layout();
-
-        this.trash.layout();
     }
 
     tentativeDef = null;
@@ -534,23 +550,27 @@ class Trash extends View {
     beginTentative (expr) {
         void expr;
         const t = new Transaction(1, 0.3);
-        this.layer.background = config.trash.activeBackground;
+        this.active = true;
+        this.layout();
         t.commit();
     }
     endTentative () {
         const t = new Transaction(1, 0.3);
-        this.layer.background = config.trash.background;
+        this.active = false;
+        this.layout();
         t.commit();
     }
     insertExpr (expr) {
         const t = new Transaction(1, 0.3);
-        this.layer.background = config.trash.background;
+        this.active = false;
+        this.layout();
         t.commit();
         void expr;
     }
     insertDef (def) {
         const t = new Transaction(1, 0.3);
-        this.layer.background = config.trash.background;
+        this.active = false;
+        this.layout();
         t.commit();
         removeNode(def);
     }
@@ -558,7 +578,17 @@ class Trash extends View {
     layout () {
         super.layout();
         this.dragController.registerTarget(this);
-        this.titleLayer.position = [16, 8];
+        const titleSize = this.titleLayer.getNaturalSize();
+        this.titleLayer.position = [
+            (this.size[0] - titleSize[0]) / 2,
+            (this.size[1] - titleSize[1]) / 2,
+        ];
+
+        this.layer.background = this.isLeftTrash
+            ? (this.active ? config.trash.bigActiveBackground : config.trash.bigBackground)
+            : (this.active ? config.trash.activeBackground : config.trash.background);
+
+        this.layer.opacity = !this.isLeftTrash || this.shouldShow ? 1 : 0;
     }
 
     *iterSublayers () {

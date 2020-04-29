@@ -43,6 +43,8 @@ export class CanvasView extends View {
             this.size[1],
         ];
         this.library.layout();
+        this.defsView.leftTrash = !this.library.isMinimized();
+        this.defsView.leftTrashWidth = this.library.size[0];
         this.defsView.defs = this.root;
         this.defsView.position = [this.library.size[0], 0];
         this.defsView.size = [

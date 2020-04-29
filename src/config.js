@@ -79,6 +79,8 @@ export default {
         title: 'Drag here to delete',
         background: [0.7, 0.7, 0.7, 1],
         activeBackground: [1, 0.3, 0.2, 1],
+        bigBackground: [0.95, 0.95, 0.95, 0.5],
+        bigActiveBackground: [1, 0.3, 0.2, 0.4],
     },
 
     toolbar: {

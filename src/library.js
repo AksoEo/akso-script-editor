@@ -324,6 +324,7 @@ class ExprFactory extends View {
                 this.#createdDragRef = this.createInstance();
                 const t = new Transaction(1, 0.3);
                 this.lib.defs.dragController.beginExprDrag(this.#createdDragRef, absX, absY);
+                this.lib.defs.showTrash = false; // don't show trash on initial drag
                 t.commitAfterLayout(this.ctx);
             }
         }
