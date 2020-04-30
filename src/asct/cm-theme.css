@@ -1,0 +1,55 @@
+.asct-cm .CodeMirror {
+    font-family: Menlo, Monaco, Consolas, monospace;
+    font-size: 14px;
+    background: #181d22;
+    color: #f5f5fe;
+}
+.asct-cm .CodeMirror .CodeMirror-gutters {
+    background: #282d32;
+    border-right-color: transparent;
+}
+.asct-cm .CodeMirror .CodeMirror-selected {
+    background: #383d72;
+}
+.asct-cm .CodeMirror .CodeMirror-linenumber {
+    color: #666;
+}
+.asct-cm .CodeMirror .CodeMirror-cursor {
+    border-left: 2px solid #fff;
+}
+.asct-cm .CodeMirror .CodeMirror-line {
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+.asct-cm .CodeMirror .cm-variable {
+    color: #e64d99;
+}
+.asct-cm .CodeMirror .cm-variable-2 {
+    color: #c63dc9;
+}
+.asct-cm .CodeMirror .cm-number {
+    color: #e6ba00;
+}
+.asct-cm .CodeMirror .cm-bool {
+    color: #d47a0d;
+}
+.asct-cm .CodeMirror .cm-null {
+    color: #ba2140;
+}
+.asct-cm .CodeMirror .cm-keyword {
+    font-weight: bold;
+    color: #fff;
+}
+.asct-cm .CodeMirror .cm-operator {
+    font-weight: bold;
+    color: #aaa;
+}
+.asct-cm .CodeMirror .cm-string {
+    color: #66d100;
+}
+.asct-cm .CodeMirror .cm-escape {
+    color: #ed9b50;
+}
+.asct-cm .CodeMirror .cm-list {
+    color: #00c2e6;
+}

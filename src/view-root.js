@@ -1,6 +1,8 @@
 import PointerTracker from 'pointer-tracker';
 import CodeMirror from 'codemirror';
 import 'codemirror/lib/codemirror.css';
+import './asct/cm-theme.css';
+import './asct/cm-mode';
 
 /// View root handler. Handles interfacing with the DOM and time.
 export class ViewRoot {
@@ -97,6 +99,7 @@ export class ViewRoot {
                 indentUnit: 4,
                 lineNumbers: true,
                 value: '',
+                mode: 'asct',
             });
             this.codeMirror.getWrapperElement().style.height = '100%';
         }

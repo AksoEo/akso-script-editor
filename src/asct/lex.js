@@ -9,7 +9,7 @@ import {
     many,
     EOFError,
 } from './comb';
-import { infixIdentRegex, bareIdentRegex } from './shared';
+import { infixIdentRegex, bareIdentRegex, numberRegex } from './shared';
 
 class StrCursor {
     constructor (str) {
@@ -181,7 +181,7 @@ const rawIdent = map(cat(tag('r#', 'raw ident start tag'), rawIdentInner), (a) =
 const bareIdent = map(regex(bareIdentRegex, 'bare ident'), match => new IdentToken(match[1]));
 const ident = oneOf(rawIdent, bareIdent);
 const infixIdent = map(regex(infixIdentRegex, 'infix ident'), match => new InfixToken(match[1]));
-const number = map(regex(/^([0-9]+)(?:\.([0-9]+))?/, 'number'), match => new NumberToken(match[1], match[2] || ''));
+const number = map(regex(numberRegex, 'number'), match => new NumberToken(match[1], match[2] || ''));
 const bool = map(oneOf(tag('yes'), tag('no'), tag('true'), tag('false')), token =>
     new BoolToken(token === 'yes' || token === 'true'));
 const nul = map(tag('null'), () => new NullToken());

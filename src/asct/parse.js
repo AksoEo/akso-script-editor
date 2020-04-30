@@ -160,7 +160,7 @@ const callExpr = ctxify(map(cat(
     if (c.length) {
         const ex = { type: 'c', func: { type: 'r', name: a.ident }, args: c[0] };
         ex.func.parent = ex;
-        c[0].parent = ex;
+        for (const arg of c[0]) arg.parent = ex;
         return ex;
     } else {
         return { type: 'r', name: a.ident };

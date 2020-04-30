@@ -19,9 +19,8 @@ const RESERVED_IDENTS = [
 
 function writeIdent (ident) {
     if (!ident.match(bareIdentRegexF) || RESERVED_IDENTS.includes(ident)) {
-        let hashes = ident.match(/^r(#+)"/);
-        if (hashes) hashes = hashes[1].length + 1;
-        else hashes = 1;
+        let hashes = 1;
+        while (ident.includes('"' + '#'.repeat(hashes))) hashes++;
         hashes = '#'.repeat(hashes);
 
         return `r${hashes}"${ident}"${hashes}`;
@@ -86,7 +85,7 @@ function writeClosure (expr) {
 }
 
 function writeSwitch (expr) {
-    let out = [];
+    const out = [];
     for (const { cond, value } of expr.matches) {
         let line = '';
         line += cond ? writeExpr(cond) : '_';
@@ -95,7 +94,7 @@ function writeSwitch (expr) {
         out.push(line);
         if (!cond) break;
     }
-    return `switch {\n${indent(out.join(',\n'))}\n}`
+    return `switch {\n${indent(out.join(',\n'))}\n}`;
 }
 
 function writeExpr (expr) {
@@ -120,7 +119,7 @@ function writeDef (def) {
 }
 
 function writeDefs (defs) {
-    let out = [];
+    const out = [];
     for (const def of defs.defs) out.push(writeDef(def));
     return out.join('\n');
 }

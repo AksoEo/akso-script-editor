@@ -7,10 +7,10 @@ import { eslint } from 'rollup-plugin-eslint';
 const inputOptions = {
     input: 'src/index.js',
     plugins: [
+        postcss(),
         eslint({
             throwOnError: true,
         }),
-        postcss(),
         babel({
             plugins: ['@babel/plugin-proposal-class-properties'],
             exclude: ['node_modules/**'],
