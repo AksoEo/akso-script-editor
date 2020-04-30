@@ -26,11 +26,12 @@ import {
 } from './lex';
 
 class TokenCursor {
-    constructor (tokenStream) {
+    constructor (tokenStream, ctx) {
         this.tokens = tokenStream;
         this.pos = [0];
         this.proxy = null;
         this.errors = [];
+        this.ctx = ctx;
     }
 
     peek () {
@@ -75,7 +76,7 @@ class TokenCursor {
     }
 
     clone () {
-        const tc = new TokenCursor(this.tokens);
+        const tc = new TokenCursor(this.tokens, this.ctx);
         tc.pos = [...this.pos];
         tc.errors = this.errors;
         return tc;
@@ -83,6 +84,7 @@ class TokenCursor {
 
     copyFrom (tc) {
         this.tokens = tc.tokens;
+        this.ctx = tc.ctx;
         this.pos = [...tc.pos];
         this.errors = tc.errors;
     }
@@ -124,15 +126,20 @@ const group = (gclass, inner) => tok => {
     tok.next();
     return i;
 };
+const ctxify = (inner) => tok => {
+    const res = inner(tok);
+    res.ctx = tok.ctx;
+    return res;
+};
 
 const nbws = opt(match(x => x instanceof SpaceToken, 'non-breaking whitespace'));
 const bws = opt(match(x => x instanceof BreakToken, 'breaking whitespace'));
 const anyws = opt(match(x => x instanceof WhitespaceToken, 'whitespace'));
 
-const tnull = map(match(x => x instanceof NullToken, 'null'), () => ({ type: 'u' }));
-const tnumber = map(match(x => x instanceof NumberToken, 'number'), x => ({ type: 'n', value: parseFloat(x.int + '.' + (x.frac || '0'), 10) }));
-const tbool = map(match(x => x instanceof BoolToken, 'bool'), x => ({ type: 'b', value: x.value }));
-const tstring = map(match(x => x instanceof StringToken, 'string'), x => ({ type: 's', value: x.contents }));
+const tnull = ctxify(map(match(x => x instanceof NullToken, 'null'), () => ({ type: 'u' })));
+const tnumber = ctxify(map(match(x => x instanceof NumberToken, 'number'), x => ({ type: 'n', value: parseFloat(x.int + '.' + (x.frac || '0'), 10) })));
+const tbool = ctxify(map(match(x => x instanceof BoolToken, 'bool'), x => ({ type: 'b', value: x.value })));
+const tstring = ctxify(map(match(x => x instanceof StringToken, 'string'), x => ({ type: 's', value: x.contents })));
 
 const primitive = oneOf(tnull, tbool, tnumber, tstring);
 
@@ -145,13 +152,19 @@ const callArgsInner = map(cat(
     anyws,
 ), ([a,, b]) => a.concat(b));
 const callArgs = group(ParensToken, callArgsInner);
-const callExpr = map(cat(
+const callExpr = ctxify(map(cat(
     match(x => x instanceof IdentToken && !(x instanceof InfixToken), 'callee identifier'),
     anyws,
     opt(callArgs),
-), ([a,, c]) => c.length ? ({ type: 'c', func: { type: 'r', name: a.ident }, args: c[0] }) : ({
-    type: 'r',
-    name: a.ident,
+), ([a,, c]) => {
+    if (c.length) {
+        const ex = { type: 'c', func: { type: 'r', name: a.ident }, args: c[0] };
+        ex.func.parent = ex;
+        c[0].parent = ex;
+        return ex;
+    } else {
+        return { type: 'r', name: a.ident };
+    }
 }));
 
 const groupExpr = group(ParensToken, expr);
@@ -161,7 +174,7 @@ const matrixInner = map(cat(
     opt(map(cat(anyws, expr), a => a[1])),
     anyws,
 ), ([a, b]) => a.concat(b));
-const matrixExpr = map(group(BracketsToken, matrixInner), items => {
+const matrixExpr = ctxify(map(group(BracketsToken, matrixInner), items => {
     const MATRIX_TYPES = 'ubnsm';
     let isPure = true;
     for (const item of items) {
@@ -170,8 +183,12 @@ const matrixExpr = map(group(BracketsToken, matrixInner), items => {
         }
     }
     if (isPure) return { type: 'm', value: items.map(item => item.value) };
-    else return { type: 'l', items };
-});
+    else {
+        const ex = { type: 'l', items };
+        for (const item of items) item.parent = ex;
+        return ex;
+    }
+}));
 
 const arrow = match(x => x instanceof InfixToken && x.ident === '->', '->');
 const fatArrow = match(x => x instanceof InfixToken && x.ident === '=>', '=>');
@@ -182,18 +199,22 @@ const lastSwitchCaseWildcard = map(match(x => x instanceof IdentToken && !x.isRa
 const lastSwitchCase = oneOf(lastSwitchCaseWildcard, expr);
 const notLastSwitchCase = not(lastSwitchCaseWildcard, expr, 'wildcard case');
 const switchCases = map(cat(
-    many(map(cat(anyws, notLastSwitchCase, anyws, fatArrow, anyws, expr, anyws, delim),
-        ([, a,,,, b]) => ({ cond: a, value: b }))),
-    opt(map(cat(anyws, lastSwitchCase, anyws, fatArrow, anyws, expr),
-        ([, a,,,, b]) => ({ cond: a, value: b }))),
+    many(ctxify(map(cat(anyws, notLastSwitchCase, anyws, fatArrow, anyws, expr, anyws, delim),
+        ([, a,,,, b]) => ({ cond: a, value: b })))),
+    opt(ctxify(map(cat(anyws, lastSwitchCase, anyws, fatArrow, anyws, expr),
+        ([, a,,,, b]) => ({ cond: a, value: b })))),
     anyws,
     opt(delim),
     anyws,
 ), ([a, b]) => a.concat(b));
 const switchContents = group(BracesToken, switchCases);
-const switchExpr = map(cat(switchIdent, anyws, switchContents), ([,, m]) => ({
-    type: 'w',
-    matches: m,
+const switchExpr = ctxify(map(cat(switchIdent, anyws, switchContents), ([,, m]) => {
+    const ex = { type: 'w', matches: m };
+    for (const { cond, value } of m) {
+        if (cond) cond.parent = ex;
+        value.parent = ex;
+    }
+    return ex;
 }));
 
 const closureArg = map(match(x => x instanceof IdentToken && !(x instanceof InfixToken), 'argument name'), x => x.ident);
@@ -205,30 +226,39 @@ const closureArgsInner = map(cat(
 const closureArgs = oneOf(map(closureArg, arg => [arg]), group(ParensToken, closureArgsInner));
 const closureWhereKey = match(x => x instanceof IdentToken && !x.isRaw && x.ident === 'where', 'where keyword');
 const closureWhere = map(opt(map(cat(closureWhereKey, anyws, group(BracesToken, program)), a => a[2])), a => a[0]);
-const closureBody = map(cat(expr, anyws, closureWhere), ([e,, w]) => {
+const closureBody = map(cat(expr, anyws, closureWhere), ([e,, w], tok) => {
     const body = {
+        ctx: tok.ctx,
         type: 'd',
         defs: new Set(),
+        floatingExpr: new Set(),
     };
     body.defs.add({
+        ctx: tok.ctx,
         type: 'ds',
         name: '=',
         expr: e,
     });
     if (w) for (const d of w.defs) body.defs.add(d);
+    for (const d of body.defs) d.parent = body;
     return body;
 });
-const closureExpr = map(cat(closureArgs, nbws, arrow, anyws, closureBody), ([p,,,, b]) => ({
+const closureExpr = ctxify(map(cat(closureArgs, nbws, arrow, anyws, closureBody), ([p,,,, b]) => ({
     type: 'f',
     params: p,
     body: b,
-}));
+})));
 
 const minus = match(x => x instanceof InfixToken && x.ident === '-', 'minus sign');
-const unaryMinusExpr = map(cat(minus, nbws, nonInfixExpr), ([,, e]) => ({
-    type: 'c',
-    func: { type: 'r', name: '-' },
-    args: [{ type: 'n', value: 0 }, e],
+const unaryMinusExpr = ctxify(map(cat(minus, nbws, nonInfixExpr), ([,, e]) => {
+    const ex = {
+        type: 'c',
+        func: { type: 'r', name: '-' },
+        args: [{ type: 'n', value: 0 }, e],
+    };
+    e.parent = ex;
+    ex.func.parent = ex;
+    return ex;
 }));
 
 const _nonInfixExpr = oneOf(
@@ -264,15 +294,21 @@ const mkInfixOp = a => {
     return a;
 };
 
-const infixExpr = map(
+const infixExpr = ctxify(map(
     cat(nonInfixExpr, anyws, match(isInfixOp, 'infix operator'), anyws, expr),
-    ([a,, o,, b]) => mkInfix({
-        type: 'c',
-        func: mkInfixOp({ type: 'r', name: o.ident }),
-        args: [a, b],
-        [IS_INFIX]: true,
-    }),
-);
+    ([a,, o,, b]) => {
+        const iex = mkInfix({
+            type: 'c',
+            func: mkInfixOp({ type: 'r', name: o.ident }),
+            args: [a, b],
+            [IS_INFIX]: true,
+        });
+        iex.func.parent = iex;
+        a.parent = iex;
+        b.parent = iex;
+        return iex;
+    },
+));
 
 const OP_PREC = [
     ['||'],
@@ -314,11 +350,15 @@ function fixPrec (infixExpr) {
                     const pRight = parts[i + 1];
                     if (!pLeft || !pRight) throw new Error(`error during precedence sort: lonely operator`);
                     i--;
-                    parts.splice(i, 3, mkInfix({
+                    const iex = mkInfix({
+                        ctx: tok.ctx,
                         type: 'c',
                         func: part,
                         args: [pLeft, pRight],
-                    }));
+                    });
+                    pLeft.parent = iex;
+                    pRight.parent = iex;
+                    parts.splice(i, 3,iex);
                 }
                 i++;
             }
@@ -338,26 +378,34 @@ function expr (tok) { // for hoisting
 }
 
 const defName = match(x => x instanceof IdentToken, 'definition name');
-const definition = map(cat(defName, anyws, equals, anyws, expr), ([n,,,, e]) => ({
-    type: 'ds',
-    name: n.ident,
-    expr: e,
+const definition = ctxify(map(cat(defName, anyws, equals, anyws, expr), ([n,,,, e]) => {
+    const def = {
+        type: 'ds',
+        name: n.ident,
+        expr: e,
+    };
+    e.parent = def;
+    return def;
 }));
 
 const _program = map(
     cat(anyws, many(map(cat(definition, bws), ([a]) => a)), opt(definition), anyws),
-    ([, a, b]) => {
+    ([, a, b], tok) => {
         const defs = new Set();
-        for (const d of a.concat(b)) defs.add(d);
-        return { type: 'd', defs };
+        const out = { ctx: tok.ctx, type: 'd', defs, floatingExpr: new Set() };
+        for (const d of a.concat(b)) {
+            defs.add(d);
+            d.parent = out;
+        }
+        return out;
     },
 );
 function program (tok) { // for hoisting
     return _program(tok);
 }
 
-export function parse (tokenStream) {
-    const cursor = new TokenCursor(tokenStream);
+export function parse (tokenStream, ctx) {
+    const cursor = new TokenCursor(tokenStream, ctx);
     const defs = program(cursor);
     if (!cursor.topLevelEof()) {
         throw cursor.getCurrentError();

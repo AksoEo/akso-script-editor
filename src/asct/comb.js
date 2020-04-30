@@ -52,7 +52,7 @@ export const takeUntil = (parser) => str => {
 };
 export const map = (parser, morph) => str => {
     const result = parser(str);
-    return morph(result);
+    return morph(result, str);
 };
 export const regex = (re, desc = 'regex') => str => {
     const match = str.regexMatch(re);

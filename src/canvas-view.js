@@ -1,8 +1,12 @@
 import { View } from './view';
 import { createContext, fromRawDefs, toRawDefs, resolveRefs } from './model';
+import { Transaction } from './layer';
 import { viewPool } from './proto-pool';
 import { DefsView } from './defs-view';
 import { Library } from './library';
+import { lex } from './asct/lex';
+import { parse } from './asct/parse';
+import { write } from './asct/write';
 
 /// Root view of the editor canvas.
 ///
@@ -23,6 +27,7 @@ export class CanvasView extends View {
         this.root = fromRawDefs({}, this.modelCtx);
         this.defsView = new DefsView(this.root);
         this.library = new Library(this.defsView);
+        this.library.onRequestLinearView = () => this.exitGraphView();
     }
 
     #onMutation = node => {
@@ -32,6 +37,54 @@ export class CanvasView extends View {
         this.defsView.needsLayout = true;
         this.resolveRefs();
     };
+
+    get isInGraphView () {
+        return this.defsView.useGraphView;
+    }
+
+    exitGraphView () {
+        const t = new Transaction(1, 1);
+        this.defsView.useGraphView = false;
+        if (this._libraryWasOpen) {
+            this.library.open();
+        }
+        t.commitAfterLayout(this.ctx);
+    }
+    enterGraphView () {
+        const t = new Transaction(1, 1);
+        this.defsView.useGraphView = true;
+        this._libraryWasOpen = this.library.isOpen;
+        this.library.close();
+        t.commitAfterLayout(this.ctx);
+    }
+
+    isInCodeMode = false;
+    enterCodeMode () {
+        const code = write(this.defsView.defs);
+        this.ctx.codeMirrorNode.style.display = '';
+        this.isInCodeMode = true;
+        this.ctx.codeMirror.setValue(code);
+    }
+    exitCodeMode () {
+        const code = this.ctx.codeMirror.getValue();
+        try {
+            const parsed = parse(lex(code), this.modelCtx);
+
+            this.root = parsed;
+            this.resolveRefs();
+            this.needsLayout = true;
+            setTimeout(() => {
+                // hack to fix arrows in graph view
+                this.defsView.needsLayout = true;
+            }, 10);
+
+            this.ctx.codeMirrorNode.style.display = 'none';
+            this.isInCodeMode = false;
+        } catch (err) {
+            // TODO: show error
+            console.error(err);
+        }
+    }
 
     layout () {
         super.layout();
@@ -52,6 +105,11 @@ export class CanvasView extends View {
             this.size[1],
         ];
         this.defsView.needsLayout = true;
+
+        const absPos = this.absolutePosition;
+        this.ctx.codeMirrorNode.style.transform = `translate(${absPos[0]}px, ${absPos[1]}px)`;
+        this.ctx.codeMirrorNode.style.width = this.size[0] + 'px';
+        this.ctx.codeMirrorNode.style.height = this.size[1] + 'px';
     }
 
     /// Loads a raw asc root node.

@@ -55,7 +55,10 @@ export class Library extends View {
         if (this.selected === item) {
             this.selected = null;
         } else {
-            if (this.defs.useGraphView) return;
+            if (this.defs.useGraphView) {
+                if (this.onRequestLinearView) this.onRequestLinearView();
+                else return;
+            }
             this.selected = item;
             this.pseudoSelected = this.selected;
         }

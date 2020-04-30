@@ -14,24 +14,28 @@ export class Toolbar extends View {
             new Button('MathExpr', () => {}),
             new Button('Help', () => {}),
             new Button('Graph', this.toggleGraphView),
+            new Button('Code', this.toggleCodeView),
         ];
     }
 
     toggleGraphView = (graphButton) => {
-        const t = new Transaction(1, 1);
-        const enabled = this.canvas.defsView.useGraphView;
+        const enabled = this.canvas.isInGraphView;
         graphButton.active = !enabled;
         if (enabled) {
-            this.canvas.defsView.useGraphView = false;
-            if (this._libraryWasOpen) {
-                this.canvas.library.open();
-            }
+            this.canvas.exitGraphView();
         } else {
-            this.canvas.defsView.useGraphView = true;
-            this._libraryWasOpen = this.canvas.library.isOpen;
-            this.canvas.library.close();
+            this.canvas.enterGraphView();
         }
-        t.commitAfterLayout(this.ctx);
+    };
+
+    toggleCodeView = (codeButton) => {
+        const enabled = this.canvas.isInCodeMode;
+        codeButton.active = !enabled;
+        if (enabled) {
+            this.canvas.exitCodeMode();
+        } else {
+            this.canvas.enterCodeMode();
+        }
     };
 
     layout () {

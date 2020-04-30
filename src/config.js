@@ -5,7 +5,7 @@ export default {
     labelFont: '500 13px Avenir Next, system, sans-serif',
     callArgFont: '500 12px Avenir Next, system, sans-serif',
 
-    maxEvalIterations: 256,
+    maxEvalIterations: 16384,
 
     // width to align the left hand side at
     lhsAlignWidth: 200,

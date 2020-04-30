@@ -47,7 +47,7 @@ function writeList (expr) {
 function writeCall (expr) {
     const callee = expr.func.name;
     if (callee.match(infixIdentRegexF) && expr.args.length === 2) {
-        if (callee === '-' && expr.args[0].type === 'n' && expr.args[0].value === 0) {
+        if (callee === '-' && expr.args[0] && expr.args[0].type === 'n' && expr.args[0].value === 0) {
             // unary minus
             return `(-${writeExpr(expr.args[1])})`;
         }

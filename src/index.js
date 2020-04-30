@@ -1,12 +1,5 @@
 import { ViewRoot } from './view-root';
 import { EditorView } from './editor-view';
-import { lex } from './asct/lex';
-import { parse } from './asct/parse';
-import { write } from './asct/write';
-
-window.lex = lex;
-window.parse = parse;
-window.write = write;
 
 /// An AKSO Script editor.
 export default class Editor {

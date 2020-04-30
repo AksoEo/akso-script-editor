@@ -1,4 +1,6 @@
 import PointerTracker from 'pointer-tracker';
+import CodeMirror from 'codemirror';
+import 'codemirror/lib/codemirror.css';
 
 /// View root handler. Handles interfacing with the DOM and time.
 export class ViewRoot {
@@ -15,16 +17,13 @@ export class ViewRoot {
 
         this.inputContainer = document.createElement('div');
         this.inputContainer.style.position = 'absolute';
-        this.inputContainer.style.zIndex = 1;
+        this.inputContainer.style.zIndex = 2;
         this.inputContainer.style.top = this.inputContainer.style.right =
             this.inputContainer.style.left = this.inputContainer.style.bottom = 0;
         this.inputContainer.style.display = 'none';
 
         this.input = document.createElement('input');
         this.inputContainer.appendChild(this.input);
-
-        this.node.appendChild(this.svgNode);
-        this.node.appendChild(this.inputContainer);
 
         const self = this;
         this.pointerTracker = new PointerTracker(this.svgNode, {
@@ -64,6 +63,17 @@ export class ViewRoot {
             this.endInput();
         });
 
+        this.codeMirrorNode = document.createElement('div');
+        this.codeMirrorNode.className = 'asct-cm';
+        this.codeMirrorNode.style.position = 'absolute';
+        this.codeMirrorNode.style.top = this.codeMirrorNode.style.left = 0;
+        this.codeMirrorNode.style.zIndex = 1;
+        this.codeMirrorNode.style.display = 'none';
+
+        this.node.appendChild(this.svgNode);
+        this.node.appendChild(this.codeMirrorNode);
+        this.node.appendChild(this.inputContainer);
+
         this.ctx = {
             scheduleLayout: this.scheduleLayout,
             scheduleDisplay: this.scheduleDisplay,
@@ -72,8 +82,26 @@ export class ViewRoot {
             beginInput: this.beginInput,
             beginCapture: this.beginCapture,
             push: this.ctxPush,
+            codeMirrorNode: this.codeMirrorNode,
+            get codeMirror () {
+                return self._getCodeMirror();
+            },
         };
     }
+
+    _getCodeMirror = () => {
+        if (!this.codeMirror) {
+            // we need to init this lazily because it breaks if we initialize it during creation
+            this.codeMirror = CodeMirror(this.codeMirrorNode, {
+                lineSeparator: '\n',
+                indentUnit: 4,
+                lineNumbers: true,
+                value: '',
+            });
+            this.codeMirror.getWrapperElement().style.height = '100%';
+        }
+        return this.codeMirror;
+    };
 
     #trackedPointers = new Map();
     beginPointer = pointer => {

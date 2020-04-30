@@ -13,10 +13,12 @@
     "babel-eslint": "^10.1.0",
     "rollup": "^1.32.1",
     "rollup-plugin-babel": "^4.4.0",
-    "rollup-plugin-eslint": "^7.0.0"
+    "rollup-plugin-eslint": "^7.0.0",
+    "rollup-plugin-postcss": "^3.1.1"
   },
   "dependencies": {
     "@tejo/akso-script": "^0.1.13",
+    "codemirror": "^5.53.2",
     "dagre": "^0.8.5",
     "pointer-tracker": "^2.3.0"
   }
