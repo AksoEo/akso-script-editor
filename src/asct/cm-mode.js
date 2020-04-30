@@ -5,15 +5,15 @@ import { bareFormIdentRegexU, bareIdentRegexU, infixIdentRegexU, numberRegexU } 
 CodeMirror.defineSimpleMode('asct', {
     start: [
         {
-            regex: /where|switch/,
+            regex: /(where|switch|otherwise)\b/,
             token: 'keyword',
         },
         {
-            regex: /yes|no|true|false/,
+            regex: /(yes|no|true|false)\b/,
             token: 'bool',
         },
         {
-            regex: /null/,
+            regex: /null\b/,
             token: 'null',
         },
         {

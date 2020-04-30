@@ -23,6 +23,7 @@ import {
     WhitespaceToken,
     SpaceToken,
     BreakToken,
+    IndentToken,
 } from './lex';
 
 class TokenCursor {
@@ -52,12 +53,12 @@ class TokenCursor {
 
     enter () {
         const t = this.peek();
-        if (!Array.isArray(t.contents)) throw new Error(`cannot enter token without contents`);
+        if (!Array.isArray(t.contents)) this.throw(`cannot enter token without contents`);
         this.pos.push(0);
     }
 
     exitAssertingEnd () {
-        if (!this.eof()) throw new Error(`attempt to exit token without reading all contents`);
+        if (!this.eof()) this.throw(`attempt to exit token without reading all contents`);
         this.pos.pop();
     }
 
@@ -93,6 +94,11 @@ class TokenCursor {
         this.errors.push(err);
     }
 
+    throw (err) {
+        if (typeof err === 'string') throw new ParseError(err, this.clone());
+        else throw err;
+    }
+
     getCurrentError (fallback = 'unknown error') {
         if (this.errors.length) {
             return new ParseError(this.errors);
@@ -102,8 +108,21 @@ class TokenCursor {
 }
 
 class ParseError {
-    constructor (msgOrErrs) {
+    constructor (msgOrErrs, state = null) {
         this.contents = msgOrErrs;
+        this.state = state;
+    }
+    get nextFewTokens () {
+        const s = this.state.clone();
+        const tokens = [];
+        for (let i = 0; i < 10; i++) {
+            if (s.eof()) break;
+            tokens.push(s.next());
+        }
+        return tokens;
+    }
+    get _debug__stringified () {
+        return this.toString();
     }
     toString () {
         if (typeof this.contents === 'string') {
@@ -119,7 +138,7 @@ class ParseError {
 
 const group = (gclass, inner) => tok => {
     const node = tok.peek();
-    if (!(node instanceof gclass)) throw new Error(`unexpected ${node}, expected ${gclass.name}`);
+    if (!(node instanceof gclass)) tok.throw(`unexpected ${node}, expected ${gclass.name}`);
     tok.enter();
     const i = inner(tok);
     tok.exitAssertingEnd();
@@ -132,9 +151,13 @@ const ctxify = (inner) => tok => {
     return res;
 };
 
-const nbws = opt(match(x => x instanceof SpaceToken, 'non-breaking whitespace'));
-const bws = opt(match(x => x instanceof BreakToken, 'breaking whitespace'));
-const anyws = opt(match(x => x instanceof WhitespaceToken, 'whitespace'));
+const nbws = many(match(x => x instanceof SpaceToken, 'non-breaking whitespace'));
+const anyws = many(match(x => x instanceof WhitespaceToken, 'whitespace'));
+const bws = tok => {
+    const r = anyws(tok);
+    for (const x of r) if (x instanceof BreakToken) return null;
+    tok.throw('expected line break');
+};
 
 const tnull = ctxify(map(match(x => x instanceof NullToken, 'null'), () => ({ type: 'u' })));
 const tnumber = ctxify(map(match(x => x instanceof NumberToken, 'number'), x => ({ type: 'n', value: parseFloat(x.int + '.' + (x.frac || '0'), 10) })));
@@ -151,12 +174,11 @@ const callArgsInner = map(cat(
     opt(expr),
     anyws,
 ), ([a,, b]) => a.concat(b));
-const callArgs = group(ParensToken, callArgsInner);
+const callArgs = map(cat(nbws, group(ParensToken, callArgsInner)), a => a[1]);
 const callExpr = ctxify(map(cat(
     match(x => x instanceof IdentToken && !(x instanceof InfixToken), 'callee identifier'),
-    anyws,
     opt(callArgs),
-), ([a,, c]) => {
+), ([a, c]) => {
     if (c.length) {
         const ex = { type: 'c', func: { type: 'r', name: a.ident }, args: c[0] };
         ex.func.parent = ex;
@@ -195,20 +217,35 @@ const fatArrow = match(x => x instanceof InfixToken && x.ident === '=>', '=>');
 const equals = match(x => x instanceof InfixToken && x.ident === '=', '=');
 
 const switchIdent = match(x => x instanceof IdentToken && !x.isRaw && x.ident === 'switch', 'switch keyword');
-const lastSwitchCaseWildcard = map(match(x => x instanceof IdentToken && !x.isRaw && x.ident === '_', 'wildcard case'), () => null);
-const lastSwitchCase = oneOf(lastSwitchCaseWildcard, expr);
-const notLastSwitchCase = not(lastSwitchCaseWildcard, expr, 'wildcard case');
+const wildcardSwitchKey = match(x => x instanceof IdentToken && !x.isRaw && x.ident === 'otherwise', 'otherwise');
+const notLastSwitchCase = not(wildcardSwitchKey, expr, 'wildcard case');
+
+const undelimSwitchCase = map(
+    cat(anyws, notLastSwitchCase, anyws, fatArrow, anyws, expr),
+    ([, a,,,, e]) => ({ cond: a, value: e }),
+);
+const switchCaseDelim = oneOf(bws, cat(nbws, delim, anyws));
+const delimSwitchCase = map(cat(undelimSwitchCase, switchCaseDelim), a => a[0]);
+const wildcardSwitchCase = map(
+    cat(wildcardSwitchKey, anyws, expr),
+    ([,, e]) => ({ cond: null, value: e }),
+);
+const lastSwitchCase = oneOf(
+    wildcardSwitchCase,
+    undelimSwitchCase,
+);
+
 const switchCases = map(cat(
-    many(ctxify(map(cat(anyws, notLastSwitchCase, anyws, fatArrow, anyws, expr, anyws, delim),
-        ([, a,,,, b]) => ({ cond: a, value: b })))),
-    opt(ctxify(map(cat(anyws, lastSwitchCase, anyws, fatArrow, anyws, expr),
-        ([, a,,,, b]) => ({ cond: a, value: b })))),
-    anyws,
-    opt(delim),
-    anyws,
+    many(delimSwitchCase),
+    opt(lastSwitchCase),
+    anyws, opt(delim), anyws,
 ), ([a, b]) => a.concat(b));
-const switchContents = group(BracesToken, switchCases);
-const switchExpr = ctxify(map(cat(switchIdent, anyws, switchContents), ([,, m]) => {
+const switchContents = oneOf(
+    group(IndentToken, switchCases),
+    map(cat(anyws, group(BracesToken, switchCases)), a => a[1]),
+    map(cat(nbws, lastSwitchCase), ([, c]) => [c]),
+);
+const switchExpr = ctxify(map(cat(switchIdent, switchContents), ([, m]) => {
     const ex = { type: 'w', matches: m };
     for (const { cond, value } of m) {
         if (cond) cond.parent = ex;
@@ -225,8 +262,24 @@ const closureArgsInner = map(cat(
 ), ([a, b]) => a.concat(b));
 const closureArgs = oneOf(map(closureArg, arg => [arg]), group(ParensToken, closureArgsInner));
 const closureWhereKey = match(x => x instanceof IdentToken && !x.isRaw && x.ident === 'where', 'where keyword');
-const closureWhere = map(opt(map(cat(closureWhereKey, anyws, group(BracesToken, program)), a => a[2])), a => a[0]);
-const closureBody = map(cat(expr, anyws, closureWhere), ([e,, w], tok) => {
+const closureWhereInner = oneOf(
+    group(IndentToken, program),
+    map(cat(anyws, group(BracesToken, program)), a => a[1]),
+    ctxify(map(cat(nbws, definition), a => {
+        const defs = {
+            type: 'd',
+            defs: new Set([a[1]]),
+            floatingExpr: new Set(),
+        };
+        a[1].parent = defs;
+        return defs;
+    })),
+);
+const closureWhere = map(
+    opt(map(cat(anyws, closureWhereKey, closureWhereInner), a => a[2])),
+    a => a[0],
+);
+const closureBody = map(cat(expr, closureWhere), ([e, w], tok) => {
     const body = {
         ctx: tok.ctx,
         type: 'd',
@@ -348,7 +401,7 @@ function fixPrec (infixExpr) {
                 if (part[IS_INFIX_OP] && ops.includes(part.name)) {
                     const pLeft = parts[i - 1];
                     const pRight = parts[i + 1];
-                    if (!pLeft || !pRight) throw new Error(`error during precedence sort: lonely operator`);
+                    if (!pLeft || !pRight) tok.throw(`error during precedence sort: lonely operator`);
                     i--;
                     const iex = mkInfix({
                         ctx: tok.ctx,
@@ -364,7 +417,7 @@ function fixPrec (infixExpr) {
             }
         }
 
-        if (parts.length !== 1) throw new Error(`error during precedence sort: incomplete reduction`);
+        if (parts.length !== 1) tok.throw(`error during precedence sort: incomplete reduction`);
         return parts[0];
     };
 }
@@ -378,7 +431,7 @@ function expr (tok) { // for hoisting
 }
 
 const defName = match(x => x instanceof IdentToken, 'definition name');
-const definition = ctxify(map(cat(defName, anyws, equals, anyws, expr), ([n,,,, e]) => {
+const _definition = ctxify(map(cat(defName, anyws, equals, anyws, expr), ([n,,,, e]) => {
     const def = {
         type: 'ds',
         name: n.ident,
@@ -387,6 +440,9 @@ const definition = ctxify(map(cat(defName, anyws, equals, anyws, expr), ([n,,,, 
     e.parent = def;
     return def;
 }));
+function definition (tok) {
+    return _definition(tok);
+}
 
 const _program = map(
     cat(anyws, many(map(cat(definition, bws), ([a]) => a)), opt(definition), anyws),

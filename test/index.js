@@ -1,4 +1,9 @@
 import Editor from '../dist/asce.esm.js';
+import { lex, parse, write } from '../dist/asce.esm.js';
+
+window.lex = lex;
+window.parse = parse;
+window.write = write;
 
 const editor = new Editor();
 editor.load({
@@ -14,7 +19,7 @@ editor.load({
     },
     _cat2: {
         t: 'c',
-        f: 'cat',
+        f: '++',
         a: ['_cat4', 'horse'],
     },
     _cat4: {

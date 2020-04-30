@@ -11,7 +11,7 @@ const RESERVED_IDENTS = [
     'false',
     'switch',
     'where',
-    '_',
+    'otherwise',
     '=',
     '->',
     '=>',
@@ -88,13 +88,12 @@ function writeSwitch (expr) {
     const out = [];
     for (const { cond, value } of expr.matches) {
         let line = '';
-        line += cond ? writeExpr(cond) : '_';
-        line += ' => ';
+        line += cond ? writeExpr(cond) + ' => ' : 'otherwise ';
         line += writeExpr(value);
         out.push(line);
         if (!cond) break;
     }
-    return `switch {\n${indent(out.join(',\n'))}\n}`;
+    return `switch {\n${indent(out.join('\n'))}\n}`;
 }
 
 function writeExpr (expr) {

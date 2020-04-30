@@ -54,6 +54,10 @@ class StrCursor {
         }
         return new LexError(fallback);
     }
+    throw (msg) {
+        if (typeof msg === 'string') throw new LexError(msg);
+        else throw msg;
+    }
 }
 
 class LexError {
@@ -124,7 +128,7 @@ export class SpaceToken extends WhitespaceToken {
 }
 export class BreakToken extends WhitespaceToken {
     toString () {
-        return `\\n`;
+        return `⏎`;
     }
 }
 export class StringToken extends Token {
@@ -162,6 +166,39 @@ export class ParensToken extends ContainerToken {
         return `( ${this.contents.join('')} )`;
     }
 }
+export class IndentToken extends ContainerToken {
+    toString () {
+        return `⇥{ ${this.contents.join('')} }`;
+    }
+}
+
+const spanned = parser => str => {
+    const start = str.pos;
+    try {
+        const item = parser(str);
+        const end = str.pos;
+        item.span = [start, end];
+        return item;
+    } catch (err) {
+        const err2 = err instanceof LexError ? err : new LexError(err);
+        err2.span = [start, str.pos];
+        throw err2;
+    }
+};
+const xtag = (t, desc) => {
+    const u = tag(t, desc);
+
+    return str => {
+        const tm = u(str);
+        if (!str.eof()) {
+            const bareMatch = (t + str.peek()).match(bareIdentRegex);
+            if (bareMatch[0].length === t.length + 1) {
+                throw new LexError(`unexpected ${str.peek()}, expected non-identifier symbol`);
+            }
+        }
+        return tm;
+    };
+};
 
 const rawIdentInner = (str) => {
     let hashes = 0;
@@ -177,16 +214,16 @@ const rawIdentInner = (str) => {
     for (let i = 0; i < closeTag.length; i++) str.next();
     return contents;
 };
-const rawIdent = map(cat(tag('r#', 'raw ident start tag'), rawIdentInner), (a) => new IdentToken(a[1], true));
-const bareIdent = map(regex(bareIdentRegex, 'bare ident'), match => new IdentToken(match[1]));
+const rawIdent = spanned(map(cat(tag('r#', 'raw ident start tag'), rawIdentInner), (a) => new IdentToken(a[1], true)));
+const bareIdent = spanned(map(regex(bareIdentRegex, 'bare ident'), match => new IdentToken(match[1])));
 const ident = oneOf(rawIdent, bareIdent);
-const infixIdent = map(regex(infixIdentRegex, 'infix ident'), match => new InfixToken(match[1]));
-const number = map(regex(numberRegex, 'number'), match => new NumberToken(match[1], match[2] || ''));
-const bool = map(oneOf(tag('yes'), tag('no'), tag('true'), tag('false')), token =>
-    new BoolToken(token === 'yes' || token === 'true'));
-const nul = map(tag('null'), () => new NullToken());
-const ws = map(regex(/^(\s+)/, 'whitespace'), match => match[1].includes('\n') ? new BreakToken() : new SpaceToken());
-const string = (str) => {
+const infixIdent = spanned(map(regex(infixIdentRegex, 'infix ident'), match => new InfixToken(match[1])));
+const number = spanned(map(regex(numberRegex, 'number'), match => new NumberToken(match[1], match[2] || '')));
+const bool = spanned(map(oneOf(xtag('yes'), xtag('no'), xtag('true'), xtag('false')), token =>
+    new BoolToken(token === 'yes' || token === 'true')));
+const nul = spanned(map(xtag('null'), () => new NullToken()));
+const ws = spanned(map(regex(/^(\s+)/, 'whitespace'), match => match[1].includes('\n') ? new BreakToken() : new SpaceToken()));
+const string = spanned((str) => {
     if (str.next() !== '"') throw new LexError('expected " at beginning of string');
     let c;
     let contents = '';
@@ -203,17 +240,93 @@ const string = (str) => {
         contents += c;
     }
     return new StringToken(contents);
-};
+});
 
-const treeBracket = map(wrap('[', ']', tokenStream, '[...]'), inner => new BracketsToken(inner));
-const treeBrace = map(wrap('{', '}', tokenStream, '{...}'), inner => new BracesToken(inner));
-const treeParens = map(wrap('(', ')', tokenStream, '(...)'), inner => new ParensToken(inner));
+const treeBracket = spanned(map(wrap('[', ']', tokenStream, '[...]'), inner => new BracketsToken(inner)));
+const treeBrace = spanned(map(wrap('{', '}', tokenStream, '{...}'), inner => new BracesToken(inner)));
+const treeParens = spanned(map(wrap('(', ')', tokenStream, '(...)'), inner => new ParensToken(inner)));
 
-const delim = map(tag(','), () => new DelimToken());
+const delim = spanned(map(tag(','), () => new DelimToken()));
 
-const oneToken = oneOf(ws, nul, bool, delim, number, string, ident, infixIdent, treeBracket, treeBrace, treeParens);
+const oneValueToken = oneOf(nul, bool, delim, number, string, ident, infixIdent, treeBracket, treeBrace, treeParens);
+const nbws = spanned(map(regex(/^[ \t]+/, 'non-breaking whitespace'), () => new SpaceToken()));
+const nbToken = oneOf(nbws, oneValueToken);
 
-const _tokenStream = many(oneToken);
+const treeIndent = spanned((str) => {
+    // find next line break
+    while (true) {
+        const c = str.peek();
+        if (c === '\n') break;
+        else if (c.match(/\s/)) str.next();
+        else throw new Error(`unexpected ${c}, expected breaking whitespace`);
+    }
+
+    const getLineIndentation = str => {
+        if (str.eof()) return -1;
+        let indent;
+        outer:
+        while (true) {
+            indent = 0;
+            while (true) {
+                const c = str.peek();
+                if (c === ' ') indent++;
+                else if (c === '\t') indent += 4;
+                else if (c === '\n') {
+                    str.next();
+                    continue outer; // skip empty lines
+                }
+                else break outer;
+                str.next();
+            }
+        }
+        return indent;
+    };
+
+    // we're now at the beginning of a line
+    // find min indetation level
+    const minIndent = getLineIndentation(str);
+
+    const contents = [];
+
+    // we're now at the beginning of the first line's contents
+    let atSOL = false;
+    while (true) {
+        if (str.eof()) break;
+        else if (str.peek() === '\n') {
+            // line break!
+            atSOL = true;
+            contents.push(new BreakToken());
+            str.next();
+            continue;
+        } else if (atSOL) {
+            atSOL = false;
+            // count indentation
+            const s = str.clone();
+            const currentIndent = getLineIndentation(s);
+            if (currentIndent < minIndent) break; // end of block
+            str.copyFrom(s); // otherwise continue
+        }
+        contents.push(nbToken(str));
+    }
+
+    return new IndentToken(contents);
+});
+
+const whereClauseKey = spanned(map(xtag('where'), () => new IdentToken('where')));
+const switchClauseKey = spanned(map(xtag('switch'), () => new IdentToken('switch')));
+
+// treeIndent will swallow trailing line breaks
+const wsWhereClause = map(cat(whereClauseKey, treeIndent), ([a, b]) => [a, b, new BreakToken()]);
+const wsSwitchClause = map(cat(switchClauseKey, treeIndent), ([a, b]) => [a, b, new BreakToken()]);
+
+const oneTokenList = oneOf(
+    wsWhereClause,
+    wsSwitchClause,
+    map(ws, x => [x]),
+    map(nbToken, x => [x]),
+);
+
+const _tokenStream = map(many(oneTokenList), x => x.flatMap(y => y));
 function tokenStream (str) { // for hoisting
     return _tokenStream(str);
 }
