@@ -1,4 +1,5 @@
 import { evaluate, analyze } from '@tejo/akso-script';
+import { infixIdentRegexF } from './asct/shared';
 import config from './config';
 
 //! # Editor model
@@ -327,6 +328,8 @@ export function makeStdRefs () {
             const nameOverride = config.stdlibNames[name] || null;
             const args = config.stdlibArgs[name] || [];
 
+            let infix = name.match(infixIdentRegexF);
+
             refs.set(name, {
                 type: 'ds',
                 isStdlib: true,
@@ -336,6 +339,7 @@ export function makeStdRefs () {
                     params: args,
                     body: {},
                     slots: config.stdlibSlots[name],
+                    infix,
                 },
             });
         }

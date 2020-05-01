@@ -698,10 +698,12 @@ const EXPR_VIEW_IMPLS = {
             this.nameLayer.text = funcName;
             const nameSize = this.nameLayer.getNaturalSize();
 
+            let infix = false;
             let params, slots;
             if (refNode && refNode.type === 'ds' && refNode.expr.type === 'f') {
                 params = refNode.expr.params;
                 slots = refNode.expr.slots || [];
+                infix = !!refNode.expr.infix;
                 for (let i = params.length; i < this.expr.args.length; i++) {
                     params.push('');
                 }
@@ -712,6 +714,8 @@ const EXPR_VIEW_IMPLS = {
                 params = this.expr.args.map(() => '');
                 slots = this.expr.args.map(() => null);
             }
+
+            this.isInfix = infix;
 
             while (this.argSlots.length > params.length) {
                 this.argSlots.pop();
@@ -754,9 +758,12 @@ const EXPR_VIEW_IMPLS = {
 
             height += config.primitives.paddingY * 2;
 
-            let width = config.primitives.paddingX;
-            this.nameLayer.position = [width, height / 2];
-            width += nameSize[0];
+            let width = 0;
+            if (!infix) {
+                width += config.primitives.paddingX;
+                this.nameLayer.position = [width, height / 2];
+                width += nameSize[0];
+            }
 
             let labelHeight = 0;
 
@@ -768,15 +775,23 @@ const EXPR_VIEW_IMPLS = {
 
                 width += config.primitives.paddingX;
 
-                const itemWidth = Math.max(slot.size[0], labelSize[0]);
+                const itemWidth = infix ? slot.size[0] : Math.max(slot.size[0], labelSize[0]);
 
                 slot.position = [width + (itemWidth - slot.size[0]) / 2, (height - slot.size[1]) / 2];
                 label.position = [width + itemWidth / 2, height];
 
                 width += itemWidth;
+
+                if (infix && i === 0) {
+                    width += config.primitives.paddingX;
+                    this.nameLayer.position = [width, height / 2];
+                    width += nameSize[0];
+                }
             }
 
-            height += labelHeight + config.primitives.paddingY;
+            if (!infix) {
+                height += labelHeight + config.primitives.paddingY;
+            }
             width += config.primitives.paddingX;
 
             this.layer.size = [width, height];
@@ -788,7 +803,9 @@ const EXPR_VIEW_IMPLS = {
         },
         *iterSublayers () {
             yield this.nameLayer;
-            for (const label of this.argLabels) yield label;
+            if (!this.isInfix) {
+                for (const label of this.argLabels) yield label;
+            }
         },
         *iterSubviews () {
             for (const slot of this.argSlots) yield slot;
