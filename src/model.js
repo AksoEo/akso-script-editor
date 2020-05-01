@@ -184,15 +184,19 @@ function fromRawExpr (expr, resolveExpr, ctx) {
         func.body.parent = func;
         return func;
     } else if (expr.t === 'w') {
-        return {
+        const sw = {
             ctx,
             type: 'w',
-            matches: expr.m.map(match => {
-                const cond = match.c ? resolveExpr(match.c) : null;
-                const value = resolveExpr(match.v);
-                return { cond, value };
-            }),
+            matches: [],
         };
+        for (const match of expr.m) {
+            const cond = match.c ? resolveExpr(match.c) : null;
+            const value = resolveExpr(match.v);
+            if (cond) cond.parent = sw;
+            value.parent = sw;
+            sw.matches.push({ cond, value });
+        }
+        return sw;
     } else {
         throw new Error(`unknown expression type ${expr.t}`);
     }
@@ -303,6 +307,11 @@ export function remove (node) {
     } else if (parent.type === 'f') {
         if (parent.expr !== node) throw new Error('internal inconsistency: expected body in parent func to be self');
         parent.body = null;
+    } else if (parent.type === 'w') {
+        for (const m of parent.matches) {
+            if (m.cond === node) m.cond = null;
+            if (m.value === node) m.value = null;
+        }
     }
 
     node.parent = null;
@@ -398,6 +407,11 @@ function resolveRefsInExpr (expr, defs, refs, _srcOverride = null) {
         const bodyScope = new Map(defs);
         for (const param of expr.params) bodyScope.set(param, { t: 'fp', name: param });
         resolveRefs(expr.body, bodyScope);
+    } else if (expr.type === 'w') {
+        for (const m of expr.matches) {
+            resolveRefsInExpr(m.cond, defs, refs);
+            resolveRefsInExpr(m.value, defs, refs);
+        }
     }
 }
 

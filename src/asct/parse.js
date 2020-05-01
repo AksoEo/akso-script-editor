@@ -227,8 +227,8 @@ const undelimSwitchCase = map(
 const switchCaseDelim = oneOf(bws, cat(nbws, delim, anyws));
 const delimSwitchCase = map(cat(undelimSwitchCase, switchCaseDelim), a => a[0]);
 const wildcardSwitchCase = map(
-    cat(wildcardSwitchKey, anyws, expr),
-    ([,, e]) => ({ cond: null, value: e }),
+    cat(anyws, wildcardSwitchKey, anyws, expr),
+    ([,,, e]) => ({ cond: null, value: e }),
 );
 const lastSwitchCase = oneOf(
     wildcardSwitchCase,

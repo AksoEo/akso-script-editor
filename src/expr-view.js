@@ -78,6 +78,11 @@ export class ExprSlot extends View {
                     useUIExpr = true;
                     exprUI = Dropdown;
                 }
+            } else if (this.spec.type === 'switchcond') {
+                if (!this.expr) {
+                    useUIExpr = true;
+                    exprUI = SwitchCondNone;
+                }
             }
         }
 
@@ -849,19 +854,194 @@ const EXPR_VIEW_IMPLS = {
             this.textLayer = new TextLayer();
             this.textLayer.font = config.identFont;
             this.textLayer.color = config.primitives.color;
+            this.textLayer.text = config.primitives.switchLabel;
+
+            this.cases = new SwitchCases(this);
         },
         deinit () {
             delete this.textLayer;
+            delete this.cases;
         },
         layout () {
-            this.textLayer.text = 'SWITCH GOES HERE';
-
+            const { paddingX, paddingY } = config.primitives;
             const textSize = this.textLayer.getNaturalSize();
-            this.layer.size = [textSize[0] + 16, textSize[1] + 4];
-            this.textLayer.position = [8, this.layer.size[1] / 2];
+            this.textLayer.position = [paddingX, paddingY + textSize[1] / 2];
+
+            this.cases.dragController = this.dragController;
+            this.cases.layout();
+
+            this.cases.position = [paddingX, paddingY + textSize[1] + paddingY];
+
+            const width = Math.max(textSize[0], this.cases.size[0]) + paddingX * 2;
+            const height = paddingY + textSize[1] + paddingY + this.cases.size[1] + paddingY;
+
+            this.layer.size = [width, height];
         },
         *iterSublayers () {
             yield this.textLayer;
         },
+        *iterSubviews () {
+            yield this.cases;
+        },
     },
 };
+
+class SwitchCases extends View {
+    constructor (exprView) {
+        super();
+        this.exprView = exprView;
+        this.matchViews = [];
+    }
+    get expr () {
+        return this.exprView.expr;
+    }
+    layout () {
+        super.layout();
+
+        // to facilitate editing, we will:
+        // - ensure at least one wildcard match entry at the end
+        // - remove all completely empty match entries, except if it's the one wildcard match entry
+        let lastEmptyRemoved = null;
+        let needsWildcard = true;
+        let passedValue = false;
+        for (let i = this.expr.matches.length - 1; i >= 0; i--) {
+            const m = this.expr.matches[i];
+            if (!m.cond && !m.value) {
+                lastEmptyRemoved = this.expr.matches.splice(i, 1)[0];
+            } else if (!passedValue && !m.cond) needsWildcard = false;
+            else if (m.cond) passedValue = true;
+        }
+
+        if (needsWildcard) {
+            if (lastEmptyRemoved) this.expr.matches.push(lastEmptyRemoved);
+            else this.expr.matches.push({ cond: null, value: null });
+        }
+
+        for (let i = 0; i < this.expr.matches.length; i++) {
+            const match = this.expr.matches[i];
+            if (!this.matchViews[i]) {
+                this.matchViews.push(new SwitchMatch(this.expr, match));
+            } else {
+                this.matchViews[i].expr = this.expr;
+                this.matchViews[i].match = match;
+            }
+            this.matchViews[i].dragController = this.dragController;
+            this.matchViews[i].layout();
+        }
+
+        while (this.matchViews.length > this.expr.matches.length) this.matchViews.pop();
+
+        const { paddingY } = config.primitives;
+
+        let maxWidth = 0;
+        let y = 0;
+        for (let i = 0; i < this.matchViews.length; i++) {
+            const matchView = this.matchViews[i];
+            matchView.position = [0, y];
+            maxWidth = Math.max(maxWidth, matchView.size[0]);
+            y += (y ? paddingY : 0) + matchView.size[1];
+        }
+
+        this.layer.size = [maxWidth, y];
+    }
+    *iterSubviews () {
+        for (const m of this.matchViews) yield m;
+    }
+}
+
+class SwitchMatch extends View {
+    constructor (expr, match) {
+        super();
+        this.expr = expr;
+        this.match = match;
+
+        this.ifLabel = new TextLayer();
+        this.thenLabel = new TextLayer();
+
+        this.ifLabel.font = this.thenLabel.font = config.identFont;
+        this.ifLabel.text = config.primitives.switchIf;
+        this.thenLabel.text = config.primitives.switchThen;
+
+        this.cond = new ExprSlot(cond => {
+            this.match.cond = cond;
+            cond.parent = this.expr;
+            this.expr.ctx.notifyMutation(this.expr);
+            this.expr.ctx.notifyMutation(cond);
+        }, this.expr.ctx);
+        this.cond.spec = { type: 'switchcond' };
+        this.value = new ExprSlot(value => {
+            this.match.value = value;
+            value.parent = this.expr;
+            this.expr.ctx.notifyMutation(this.expr);
+            this.expr.ctx.notifyMutation(value);
+        }, this.expr.ctx);
+    }
+    layout () {
+        super.layout();
+
+        this.cond.exprCtx = this.expr.ctx;
+        this.value.exprCtx = this.expr.ctx;
+        this.cond.expr = this.match.cond;
+        this.value.expr = this.match.value;
+
+        this.cond.dragController = this.value.dragController = this.dragController;
+
+        this.cond.layoutIfNeeded();
+        this.value.layoutIfNeeded();
+
+        const { paddingX, paddingY } = config.primitives;
+
+        const height = Math.max(this.cond.size[1], this.value.size[1]) + paddingY * 2;
+
+        let width = 0;
+        if (this.match.cond) {
+            const ifSize = this.ifLabel.getNaturalSize();
+            this.ifLabel.position = [width, height / 2];
+            width += ifSize[0] + paddingX;
+        }
+        this.cond.position = [width, (height - this.cond.size[1]) / 2];
+        width += this.cond.size[0] + paddingX;
+        if (this.match.cond) {
+            const thenSize = this.thenLabel.getNaturalSize();
+            this.thenLabel.position = [width, height / 2];
+            width += thenSize[0] + paddingX;
+        }
+        this.value.position = [width, (height - this.value.size[1]) / 2];
+        width += this.value.size[0];
+
+        this.layer.size = [width, height];
+    }
+    *iterSublayers () {
+        if (this.match.cond) {
+            yield this.ifLabel;
+            yield this.thenLabel;
+        }
+    }
+    *iterSubviews () {
+        yield this.cond;
+        yield this.value;
+    }
+}
+
+class SwitchCondNone extends View {
+    constructor () {
+        super();
+        this.label = new TextLayer();
+        this.label.font = config.identFont;
+        this.label.text = config.primitives.switchOtherwise;
+        const t = new Transaction(1, 0);
+        this.layout();
+        t.commit();
+    }
+    layout () {
+        super.layout();
+        const labelSize = this.label.getNaturalSize();
+        const { paddingX, paddingYS } = config.primitives;
+        const height = labelSize[1] + paddingYS * 2;
+        this.label.position = [paddingX, height / 2];
+        this.layer.size = [paddingX * 2 + labelSize[0], height];
+    }
+    *iterSublayers () {
+        yield this.label;
+    }
+}

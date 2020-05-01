@@ -54,6 +54,10 @@ export default {
         false: 'no',
         listLabel: 'create list containing...',
         functionLabel: 'function',
+        switchLabel: 'switch',
+        switchIf: 'if',
+        switchThen: 'then',
+        switchOtherwise: 'otherwise',
     },
 
     defs: {
