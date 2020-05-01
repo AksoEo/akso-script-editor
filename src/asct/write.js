@@ -97,6 +97,7 @@ function writeSwitch (expr) {
 }
 
 function writeExpr (expr) {
+    if (!expr) return 'null';
     if (expr.type === 'u') return 'null';
     if (expr.type === 'b') return expr.value ? 'yes' : 'no';
     if (expr.type === 'n') return expr.value.toString();

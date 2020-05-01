@@ -58,6 +58,7 @@ export default {
 
     defs: {
         background: [0.9, 0.9, 0.9, 1],
+        newDefName: n => `new def (${n})`,
     },
     def: {
         cornerRadius: 12,

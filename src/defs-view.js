@@ -22,10 +22,32 @@ export class DefsView extends View {
 
         this.trash = new Trash();
         this.trash.dragController = this.dragController;
+
+        this.addDefView = new AddDefView(this.addDef);
     }
 
     /// List of arrows by source
     #arrows = new Map();
+
+    addDef = () => {
+        const newDef = {
+            ctx: this.defs.ctx,
+            type: 'ds',
+            name: config.defs.newDefName(this.defs.defs.size),
+            expr: null,
+            parent: this.defs,
+        };
+
+        const newDefView = getProtoView(newDef, DefView);
+        newDefView.position = this.addDefView.position;
+        newDefView.size = this.addDefView.size;
+
+        const t = new Transaction(1, 0.3);
+
+        this.defs.defs.add(newDef);
+        this.defs.ctx.notifyMutation(this.defs);
+        t.commitAfterLayout(this.ctx);
+    };
 
     onScroll ({ dx, dy }) {
         this.scroll[0] += dx;
@@ -172,6 +194,7 @@ export class DefsView extends View {
         }
 
         this.scrollAnchor.defs = this.defs;
+        this.scrollAnchor.addDefView = !this.useGraphView ? this.addDefView : null;
         this.scrollAnchor.arrows = this.#arrows;
         this.scrollAnchor.flushSubviews();
         this.scrollAnchor.layout();
@@ -203,6 +226,12 @@ export class DefsView extends View {
             maxWidth = Math.max(maxWidth, defView.size[0]);
             i++;
         }
+
+        this.addDefView.parentWidth = this.size[0];
+        this.addDefView.layout();
+        this.addDefView.position = [0, y];
+        y += this.addDefView.size[1] + 24;
+
         if (this.tentativeDef && this.tentativeInsertPos === null) {
             // did not find an insertion point; probably because it’s out of bounds
             this.tentativeInsertPos = this.defs.defs.size;
@@ -314,6 +343,7 @@ class DefsAnchorView extends View {
         for (const item of this.defs.defs) {
             yield getProtoView(item, DefView);
         }
+        if (this.addDefView) yield this.addDefView;
         for (const expr of this.floatingExpr) yield getProtoView(expr, ExprView);
     }
 }
@@ -523,6 +553,36 @@ class DefView extends View {
     *iterSubviews () {
         yield this.refView;
         yield this.exprSlot;
+    }
+}
+
+class AddDefView extends View {
+    constructor (onAdd) {
+        super();
+        this.onAdd = onAdd;
+        this.layer.background = config.def.background;
+        this.label = new TextLayer();
+        this.label.font = config.identFont;
+        this.label.text = '+';
+        this.label.align = 'center';
+        this.needsLayout = true;
+    }
+
+    layout () {
+        super.layout();
+
+        const height = 32;
+
+        this.layer.size = [this.parentWidth, height];
+        this.label.position = [this.layer.size[0] / 2, this.layer.size[1] / 2];
+    }
+
+    *iterSublayers () {
+        yield this.label;
+    }
+
+    onPointerStart () {
+        this.onAdd();
     }
 }
 
