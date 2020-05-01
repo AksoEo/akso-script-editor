@@ -108,35 +108,57 @@ export class Library extends View {
     }
     updateTab (tab) {
         if (tab.id === 'references') {
+            if (!tab.itemList._byDef) tab.itemList._byDef = new WeakMap();
+            const byDef = tab.itemList._byDef;
             tab.itemList.items = [];
             for (const def of this.defs.defs.defs) {
+                if (!byDef.has(def)) byDef.set(def, {});
+                const state = byDef.get(def);
                 const name = def.name;
-                tab.itemList.items.push(
-                    new ExprFactory(this, ctx => ({ ctx, type: 'r', name }))
-                );
 
-                const ctx = this.defs.defs.ctx;
-                const refExpr = { ctx, type: 'r', name }
-                const tmpDef = { ctx, type: 'ds', name: '__vmRefTemp', expr: refExpr };
-                tmpDef.parent = this.defs.defs;
-                refExpr.parent = tmpDef;
-
-                const evr = evalExpr(refExpr);
-                if (evr && evr.result instanceof VMFun) {
-                    // this is a function
-                    tab.itemList.items.push(
-                        new ExprFactory(this, (ctx, isDemo) => {
-                            const expr = {
-                                ctx,
-                                type: 'c',
-                                func: { ctx, type: 'r', name },
-                                args: [],
-                            };
-                            if (isDemo) expr.func.refNode = def;
-                            return expr;
-                        })
-                    );
+                if (name !== state.name) {
+                    state.name = name;
+                    if (!state.refExpr) {
+                        state.refExpr = new ExprFactory(this, ctx => ({ ctx, type: 'r', name }));
+                    } else {
+                        state.refExpr.update(ctx => ({ ctx, type: 'r', name }));
+                    }
                 }
+
+                let isCallable = false;
+                {
+                    // check if it's a function
+                    const ctx = this.defs.defs.ctx;
+                    const refExpr = { ctx, type: 'r', name };
+                    const tmpDef = { ctx, type: 'ds', name: '__vmRefTemp', expr: refExpr };
+                    tmpDef.parent = this.defs.defs;
+                    refExpr.parent = tmpDef;
+
+                    const evr = evalExpr(refExpr);
+                    isCallable = evr && evr.result instanceof VMFun;
+                }
+
+                if (isCallable) {
+                    const makeFn = (ctx, isDemo) => {
+                        const expr = {
+                            ctx,
+                            type: 'c',
+                            func: { ctx, type: 'r', name },
+                            args: [],
+                        };
+                        if (isDemo) expr.func.refNode = def;
+                        return expr;
+                    };
+
+                    if (!state.callExpr) {
+                        state.callExpr = new ExprFactory(this, makeFn);
+                    } else {
+                        state.callExpr.update(makeFn);
+                    }
+                } else state.callExpr = null;
+
+                if (state.refExpr) tab.itemList.items.push(state.refExpr);
+                if (state.callExpr) tab.itemList.items.push(state.callExpr);
             }
 
             tab.itemList.needsLayout = true;
@@ -337,6 +359,12 @@ class ExprFactory extends View {
         });
         this.expr = makeExpr(this.exprCtx, true);
     }
+
+    update = makeExpr => {
+        this.makeExpr = makeExpr;
+        this.expr = makeExpr(this.exprCtx, true);
+        this.needsLayout = true;
+    };
 
     layout () {
         super.layout();
