@@ -22,12 +22,24 @@ import config from './config';
 
 export function createContext () {
     const mutationListeners = [];
+    const fvMutationListeners = [];
     return {
         onMutation: listener => mutationListeners.push(listener),
         notifyMutation: node => {
             for (const listener of mutationListeners) {
                 try {
                     listener(node);
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        },
+        formVars: [],
+        onFormVarsMutation: listener => fvMutationListeners.push(listener),
+        notifyFormVarsMutation: () => {
+            for (const listener of fvMutationListeners) {
+                try {
+                    listener();
                 } catch (err) {
                     console.error(err);
                 }
@@ -416,8 +428,13 @@ export function evalExpr (expr) {
 
     let result = undefined;
     try {
-        result = evaluate(rawDefs, out, () => {
-            throw new Error('unsupported request for form value');
+        result = evaluate(rawDefs, out, id => {
+            for (const fv of expr.ctx.formVars) {
+                if (fv.name === id) {
+                    return fv.value;
+                }
+            }
+            return null;
         }, {
             shouldHalt: () => {
                 invocations++;

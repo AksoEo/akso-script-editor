@@ -110,6 +110,8 @@ export class CanvasView extends View {
         this.ctx.codeMirrorNode.style.transform = `translate(${absPos[0]}px, ${absPos[1]}px)`;
         this.ctx.codeMirrorNode.style.width = this.size[0] + 'px';
         this.ctx.codeMirrorNode.style.height = this.size[1] + 'px';
+
+        this.ctx.extras.setModelCtx(this.root.ctx);
     }
 
     /// Loads a raw asc root node.

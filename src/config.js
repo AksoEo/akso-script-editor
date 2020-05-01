@@ -117,6 +117,18 @@ export default {
         },
     },
 
+    formVars: {
+        title: 'Form Variables',
+        description: 'Enter form variable values here for testing',
+        defaultName: n => `form-var-${n}`,
+        types: {
+            null: 'null',
+            bool: 'bool',
+            number: 'number',
+            string: 'string',
+        },
+    },
+
     icons: {
         size: 14,
         number: 'M7,2 L6.8,4 L8.8,4 L9,2 L11,2 L10.8,4 L12,4 L12,6 L10.6,6 L10.4,7.999 L12,8 L12,10 L10.2,9.999 L10,12 L8,12 L8.2,9.999 L6.2,9.999 L6,12 L4,12 L4.2,9.999 L3,10 L3,8 L4.4,7.999 L4.6,6 L3,6 L3,4 L4.8,4 L5,2 L7,2 Z M8.6,6 L6.6,6 L6.4,7.999 L8.4,7.999 L8.6,6 Z',

@@ -10,8 +10,26 @@ const inputOptions = {
         postcss(),
         eslint({
             throwOnError: true,
+            include: ['src/**'],
+            useEslintrc: false,
+            parser: 'babel-eslint',
+            envs: ['browser', 'node', 'es6'],
+            rules: {
+                'no-unused-vars': 'warn',
+                'semi': 'warn',
+                'comma-dangle': ['warn', 'always-multiline'],
+                'indent': 'warn',
+                'no-trailing-spaces': 'warn',
+                'yield-star-spacing': 'warn',
+                'prefer-const': 'warn',
+                'no-undef': 'error',
+                'no-const-assign': 'error',
+            },
         }),
         babel({
+            presets: [
+                ['@babel/preset-react', { pragma: 'h' }]
+            ],
             plugins: ['@babel/plugin-proposal-class-properties'],
             exclude: ['node_modules/**'],
         }),

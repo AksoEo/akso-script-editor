@@ -3,6 +3,7 @@ import CodeMirror from 'codemirror';
 import 'codemirror/lib/codemirror.css';
 import './asct/cm-theme.css';
 import './asct/cm-mode';
+import { ExtrasRoot } from './extras';
 
 /// View root handler. Handles interfacing with the DOM and time.
 export class ViewRoot {
@@ -19,7 +20,7 @@ export class ViewRoot {
 
         this.inputContainer = document.createElement('div');
         this.inputContainer.style.position = 'absolute';
-        this.inputContainer.style.zIndex = 2;
+        this.inputContainer.style.zIndex = 3;
         this.inputContainer.style.top = this.inputContainer.style.right =
             this.inputContainer.style.left = this.inputContainer.style.bottom = 0;
         this.inputContainer.style.display = 'none';
@@ -72,8 +73,11 @@ export class ViewRoot {
         this.codeMirrorNode.style.zIndex = 1;
         this.codeMirrorNode.style.display = 'none';
 
+        this.extras = new ExtrasRoot();
+
         this.node.appendChild(this.svgNode);
         this.node.appendChild(this.codeMirrorNode);
+        this.node.appendChild(this.extras.node);
         this.node.appendChild(this.inputContainer);
 
         this.ctx = {
@@ -88,6 +92,7 @@ export class ViewRoot {
             get codeMirror () {
                 return self._getCodeMirror();
             },
+            extras: this.extras,
         };
     }
 
