@@ -354,7 +354,7 @@ const EXPR_VIEW_IMPLS = {
         },
         layout () {
             this.textLayer.text = this.expr.name;
-            if (!this.isDef && !this.expr.name.startsWith('@') && !this.expr.refNode) {
+            if (!this._isDemo && !this.isDef && !this.expr.name.startsWith('@') && !this.expr.refNode) {
                 this.iconLayer.path = config.icons.refBroken;
                 this.layer.background = config.primitives.refBroken;
                 this.layer.stroke = config.primitives.refBrokenOutline;

@@ -1,8 +1,9 @@
+import { VMFun } from '@tejo/akso-script';
 import { View } from './view';
 import { ExprView } from './expr-view';
 import { Layer, TextLayer, Transaction } from './layer';
 import { getProtoView } from './proto-pool';
-import { makeStdRefs, createContext } from './model';
+import { makeStdRefs, createContext, evalExpr } from './model';
 import config from './config';
 
 export class Library extends View {
@@ -106,8 +107,40 @@ export class Library extends View {
         }
     }
     updateTab (tab) {
-        // TODO
-        void tab;
+        if (tab.id === 'references') {
+            tab.itemList.items = [];
+            for (const def of this.defs.defs.defs) {
+                const name = def.name;
+                tab.itemList.items.push(
+                    new ExprFactory(this, ctx => ({ ctx, type: 'r', name }))
+                );
+
+                const ctx = this.defs.defs.ctx;
+                const refExpr = { ctx, type: 'r', name }
+                const tmpDef = { ctx, type: 'ds', name: '__vmRefTemp', expr: refExpr };
+                tmpDef.parent = this.defs.defs;
+                refExpr.parent = tmpDef;
+
+                const evr = evalExpr(refExpr);
+                if (evr && evr.result instanceof VMFun) {
+                    // this is a function
+                    tab.itemList.items.push(
+                        new ExprFactory(this, (ctx, isDemo) => {
+                            const expr = {
+                                ctx,
+                                type: 'c',
+                                func: { ctx, type: 'r', name },
+                                args: [],
+                            };
+                            if (isDemo) expr.func.refNode = def;
+                            return expr;
+                        })
+                    );
+                }
+            }
+
+            tab.itemList.needsLayout = true;
+        }
     }
 
     isMinimized () {
@@ -302,13 +335,14 @@ class ExprFactory extends View {
         this.exprCtx.onMutation(() => {
             this.needsLayout = true;
         });
-        this.expr = makeExpr(this.exprCtx);
+        this.expr = makeExpr(this.exprCtx, true);
     }
 
     layout () {
         super.layout();
         const exprView = getProtoView(this.expr, ExprView);
         exprView.noInteraction = true;
+        exprView._isDemo = true;
         exprView.decorationOnly = true;
         exprView.layout();
         this.size = exprView.size;
