@@ -5,7 +5,7 @@ export default {
     labelFont: '500 13px Avenir Next, system, sans-serif',
     callArgFont: '500 12px Avenir Next, system, sans-serif',
 
-    maxEvalIterations: 16384,
+    maxEvalIterations: 4096,
 
     // width to align the left hand side at
     lhsAlignWidth: 200,
@@ -49,6 +49,8 @@ export default {
         callHoverOutline: [0.8, 0, 0.24, 1],
         func: [1, 1, 1, 1],
         funcOutline: [0.8, 0.5, 0.5, 1],
+        switch: [1, 1, 1, 1],
+        switchOutline: [0.5, 0.5, 0.8, 1],
 
         true: 'yes',
         false: 'no',

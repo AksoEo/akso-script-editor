@@ -809,7 +809,7 @@ const EXPR_VIEW_IMPLS = {
         },
         *iterSubviews () {
             for (const slot of this.argSlots) yield slot;
-            yield this.peekView;
+            if (!this._isDemo) yield this.peekView;
         },
         onPointerEnter () {
             const result = evalExpr(this.expr);
@@ -865,8 +865,8 @@ const EXPR_VIEW_IMPLS = {
     w: {
         init () {
             this.layer.cornerRadius = config.cornerRadius;
-            this.layer.background = config.primitives.func;
-            this.layer.stroke = config.primitives.funcOutline;
+            this.layer.background = config.primitives.switch;
+            this.layer.stroke = config.primitives.switchOutline;
             this.layer.strokeWidth = config.primitives.outlineWeight;
             this.textLayer = new TextLayer();
             this.textLayer.font = config.identFont;
