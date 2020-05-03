@@ -7,3 +7,15 @@ export const infixIdentRegexU = /([+\-*/\\|~!@#$%^&=<>]+)/;
 export const infixIdentRegexF = /^([+\-*/\\|~!@#$%^&=<>]+)$/;
 export const numberRegex = /^(-?[0-9]+)(?:\.([0-9]+))?/;
 export const numberRegexU = /(-?[0-9]+)(?:\.([0-9]+))?/;
+export const OP_PREC = [
+    ['||'],
+    ['&&'],
+    ['==', '!='],
+    ['>=', '<=', '>', '<'],
+    ['|'],
+    ['&'],
+    ['<<', '>>'],
+    ['+', '-'],
+    ['*', '/', '%'],
+    ['^'],
+];

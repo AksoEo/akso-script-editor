@@ -8,7 +8,6 @@ import {
     not,
     EOFError,
 } from './comb';
-
 import {
     NullToken,
     BoolToken,
@@ -25,6 +24,7 @@ import {
     BreakToken,
     IndentToken,
 } from './lex';
+import { OP_PREC } from './shared';
 
 class TokenCursor {
     constructor (tokenStream, ctx) {
@@ -189,7 +189,18 @@ const callExpr = ctxify(map(cat(
     }
 }));
 
-const groupExpr = group(ParensToken, expr);
+const IS_INFIX = Symbol();
+const IS_INFIX_OP = Symbol();
+
+const groupExpr = map(
+    group(ParensToken, cat(anyws, expr, anyws)),
+    a => {
+        const ex = a[1];
+        if (!ex) return ex;
+        delete ex[IS_INFIX]; // mark this non-infix so fixPrec doesn't mess it up
+        return ex;
+    },
+);
 
 const matrixInner = map(cat(
     many(map(cat(anyws, expr, anyws, delim), a => a[1])),
@@ -329,13 +340,11 @@ function nonInfixExpr (tok) { // for hoisting
 
 const isInfixOp = x => x instanceof InfixToken && x.ident !== '=' && x.ident !== '->' && x.ident !== '=>';
 
-const IS_INFIX = Symbol();
-const IS_INFIX_OP = Symbol();
-
 const mkInfix = a => {
     Object.defineProperty(a, IS_INFIX, {
         value: true,
         enumerable: false,
+        configurable: true,
     });
     return a;
 };
@@ -343,6 +352,7 @@ const mkInfixOp = a => {
     Object.defineProperty(a, IS_INFIX_OP, {
         value: true,
         enumerable: false,
+        configurable: true,
     });
     return a;
 };
@@ -363,18 +373,6 @@ const infixExpr = ctxify(map(
     },
 ));
 
-const OP_PREC = [
-    ['||'],
-    ['&&'],
-    ['==', '!='],
-    ['>=', '<=', '>', '<'],
-    ['|'],
-    ['&'],
-    ['<<', '>>'],
-    ['+', '-'],
-    ['*', '/', '%'],
-    ['^'],
-];
 const KNOWN_PREC_OPS = OP_PREC.flatMap(x => x);
 
 function fixPrec (infixExpr) {

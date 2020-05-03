@@ -306,7 +306,7 @@ const treeIndent = spanned((str) => {
             if (currentIndent < minIndent) break; // end of block
             str.copyFrom(s); // otherwise continue
         }
-        contents.push(nbToken(str));
+        contents.push(...nbTreeToken(str));
     }
 
     return new IndentToken(contents);
@@ -319,9 +319,21 @@ const switchClauseKey = spanned(map(xtag('switch'), () => new IdentToken('switch
 const wsWhereClause = map(cat(whereClauseKey, treeIndent), ([a, b]) => [a, b, new BreakToken()]);
 const wsSwitchClause = map(cat(switchClauseKey, treeIndent), ([a, b]) => [a, b, new BreakToken()]);
 
-const oneTokenList = oneOf(
+const indentClause = oneOf(
     wsWhereClause,
     wsSwitchClause,
+);
+
+const _nbTreeToken = oneOf(
+    indentClause,
+    map(nbToken, x => [x]),
+);
+function nbTreeToken (str) { // for hoisting
+    return _nbTreeToken(str);
+}
+
+const oneTokenList = oneOf(
+    indentClause,
     map(ws, x => [x]),
     map(nbToken, x => [x]),
 );
