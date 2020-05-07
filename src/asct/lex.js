@@ -268,6 +268,7 @@ const treeIndent = spanned((str) => {
         while (true) {
             indent = 0;
             while (true) {
+                if (str.eof()) return -1;
                 const c = str.peek();
                 if (c === ' ') indent++;
                 else if (c === '\t') indent += 4;
