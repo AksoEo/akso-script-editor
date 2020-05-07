@@ -328,7 +328,7 @@ export function makeStdRefs () {
             const nameOverride = config.stdlibNames[name] || null;
             const args = config.stdlibArgs[name] || [];
 
-            let infix = name.match(infixIdentRegexF);
+            const infix = name.match(infixIdentRegexF);
 
             refs.set(name, {
                 type: 'ds',
