@@ -1,11 +1,12 @@
 import { VMFun } from '@tejo/akso-script';
-import { View } from './view';
+import { View, Layer, TextLayer, Transaction } from './ui';
 import { ExprView } from './expr-view';
-import { Layer, TextLayer, Transaction } from './layer';
 import { getProtoView } from './proto-pool';
 import { makeStdRefs, createContext, evalExpr } from './model';
+import Scrollbar from './scrollbar';
 import config from './config';
 
+/// This is the library of objects on the left-hand side.
 export class Library extends View {
     constructor (defs) {
         super();
@@ -16,8 +17,6 @@ export class Library extends View {
         this.sideTabs = new SideTabs(config.library.items, item => {
             this.toggleSelected(item);
         });
-
-        this.toggleSelected(Object.keys(config.library.items)[0]);
 
         this.tabs = {};
         for (const t in config.library.items) {
@@ -32,6 +31,8 @@ export class Library extends View {
 
             this.createTab(this.tabs[t]);
         }
+
+        this.toggleSelected(Object.keys(config.library.items)[0]);
     }
 
     open () {
@@ -288,6 +289,9 @@ class Scrollable extends View {
         super();
         this.contents = contents;
         this.layer.clipContents = true;
+
+        this.scrollbar = new Scrollbar();
+        this.scrollbar.onScroll = dy => this.onScroll({ dy });
     }
 
     scroll = 0;
@@ -299,24 +303,34 @@ class Scrollable extends View {
 
         const scrollMin = 0;
         const scrollMax = Math.max(0, this.contents.size[1] - this.size[1]);
+
         this.scroll = Math.max(scrollMin, Math.min(this.scroll, scrollMax));
+
+        this.scrollbar.edgeX = this.size[0];
+        this.scrollbar.height = this.size[1];
+        this.scrollbar.scrollMax = scrollMax;
+        this.scrollbar.scroll = this.scroll;
+        this.scrollbar.layout();
 
         this.contents.visibleBoundsY = [this.scroll, this.scroll + this.size[1]];
         this.contents.position = [0, -this.scroll];
         this.contents.flushSubviews();
     }
 
-    onScroll ({ dy }) {
+    onScroll = ({ dy }) => {
         this.scroll += dy;
         this.needsLayout = true;
-    }
+    };
 
     *iterSubviews () {
         yield this.contents;
+        yield this.scrollbar;
     }
 }
 
 class ItemList extends View {
+    wantsChildLayout = true;
+
     items = [];
 
     layout () {
@@ -326,7 +340,7 @@ class ItemList extends View {
         let y = 8;
 
         for (const item of this.items) {
-            item.layout();
+            item.layoutIfNeeded();
             item.position = [16, y];
             y += item.size[1] + 8;
             width = Math.max(width, 32 + item.size[0]);
@@ -360,6 +374,8 @@ class ExprFactory extends View {
         this.expr = makeExpr(this.exprCtx, true);
     }
 
+    wantsChildLayout = true;
+
     update = makeExpr => {
         this.makeExpr = makeExpr;
         this.expr = makeExpr(this.exprCtx, true);
@@ -372,8 +388,8 @@ class ExprFactory extends View {
         exprView.noInteraction = true;
         exprView._isDemo = true;
         exprView.decorationOnly = true;
-        exprView.layout();
-        this.size = exprView.size;
+        exprView.layoutIfNeeded();
+        this.layer.size = exprView.size;
     }
 
     #dragStartPos = [0, 0];

@@ -1,7 +1,11 @@
-import { View } from './view';
-import { Layer, TextLayer, PathLayer, Transaction } from './layer';
+import { View, Layer, TextLayer, PathLayer, Transaction } from './ui';
 import config from './config';
 
+/// A dropdown.
+///
+/// # Properties
+/// - expr: { value: string }
+/// - spec: { variants: { [value]: label } }
 export class Dropdown extends View {
     constructor (expr, spec) {
         super();
@@ -15,6 +19,7 @@ export class Dropdown extends View {
         this.layer.cornerRadius = config.cornerRadius;
 
         this.anchorLayer = new Layer();
+        this.addSublayer(this.anchorLayer);
 
         this.bgLayer = new Layer();
         this.bgLayer.background = this.layer.background;
@@ -34,6 +39,7 @@ export class Dropdown extends View {
         this.labels = new Map();
 
         this.anchored = true;
+        this.needsLayout = true;
     }
 
     #expr;
@@ -111,6 +117,9 @@ export class Dropdown extends View {
                 const viewProxy = {
                     layer: this.anchorLayer,
                     didMount: () => {},
+                    didAttach: () => {},
+                    didUnmount: () => {},
+                    didDetach: () => {},
                     sublayers: null,
                     subviews: null,
                 };
@@ -316,9 +325,5 @@ export class Dropdown extends View {
             this.layout();
             t.commit();
         }
-    }
-
-    *iterSublayers () {
-        if (this.anchored) yield this.anchorLayer;
     }
 }

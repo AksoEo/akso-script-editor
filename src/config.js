@@ -1,9 +1,11 @@
+const fontStack = '"Avenir Next", "Museo Sans", Roboto, "Helvetica Neue", Ubuntu, Cantarell, sans-serif';
+
 export default {
     cornerRadius: 4,
 
-    identFont: '500 14px Avenir Next, system, sans-serif',
-    labelFont: '500 13px Avenir Next, system, sans-serif',
-    callArgFont: '500 12px Avenir Next, system, sans-serif',
+    identFont: '500 14px ' + fontStack,
+    labelFont: '500 13px ' + fontStack,
+    callArgFont: '500 12px ' + fontStack,
 
     maxEvalIterations: 4096,
 
@@ -102,6 +104,15 @@ export default {
             paddingX: 7,
             paddingY: 3,
         },
+    },
+
+    scrollbar: {
+        margin: 2,
+        size: 8,
+        background: [0, 0, 0, 0.1],
+        thumb: [0, 0, 0, 0.3],
+        hoverThumb: [0, 0, 0, 0.5],
+        minThumbSize: 16,
     },
 
     library: {
@@ -251,7 +262,9 @@ export default {
         med: 'median',
         date_sub: 'subtract dates',
         date_add: 'add to date',
+        date_today: 'current date',
         date_fmt: 'format date',
+        time_now: 'current time',
         datetime_fmt: 'format date time',
         currency_fmt: 'format currency',
         country_fmt: 'format country',

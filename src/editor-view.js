@@ -1,4 +1,4 @@
-import { View } from './view';
+import { View } from './ui';
 import { Toolbar } from './toolbar';
 import { CanvasView } from './canvas-view';
 

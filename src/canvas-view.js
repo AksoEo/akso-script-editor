@@ -1,6 +1,5 @@
-import { View } from './view';
+import { View, Transaction } from './ui';
 import { createContext, fromRawDefs, toRawDefs, resolveRefs } from './model';
-import { Transaction } from './layer';
 import { viewPool } from './proto-pool';
 import { DefsView } from './defs-view';
 import { Library } from './library';

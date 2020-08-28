@@ -1,33 +1,24 @@
 import PointerTracker from 'pointer-tracker';
-import CodeMirror from 'codemirror';
-import 'codemirror/lib/codemirror.css';
-import './asct/cm-theme.css';
-import './asct/cm-mode';
-import { ExtrasRoot } from './extras';
+import { svgNS } from './layer/base';
 
 /// View root handler. Handles interfacing with the DOM and time.
 export class ViewRoot {
-    /// a stack of nodes that serve as root views. the topmost is the active one.
-    stack = [];
+    /// a stack of windows. the topmost is the active one.
+    windows = [];
 
     constructor () {
         this.node = document.createElement('div');
-        this.node.setAttribute('class', 'asce-editor');
-        this.svgNode = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        this.node.setAttribute('class', 'asce-view-root');
+        this.svgNode = document.createElementNS(svgNS, 'svg');
+        this.svgNode.setAttribute('class', 'asce-inner-view-root');
         this.svgNode.style.cursor = 'default';
+        this.svgNode.style.webkitUserSelect = this.svgNode.style.userSelect = 'none';
 
         this.node.style.position = 'relative';
 
-        this.inputContainer = document.createElement('div');
-        this.inputContainer.style.position = 'absolute';
-        this.inputContainer.style.zIndex = 3;
-        this.inputContainer.style.top = this.inputContainer.style.right =
-            this.inputContainer.style.left = this.inputContainer.style.bottom = 0;
-        this.inputContainer.style.display = 'none';
+        this.node.appendChild(this.svgNode);
 
-        this.input = document.createElement('input');
-        this.inputContainer.appendChild(this.input);
-
+        // TODO: fix this
         const self = this;
         this.pointerTracker = new PointerTracker(this.svgNode, {
             start (pointer, event) {
@@ -48,68 +39,16 @@ export class ViewRoot {
         this.svgNode.addEventListener('wheel', this.#onWheel);
         this.svgNode.addEventListener('mousemove', this.#onMouseMove);
 
-        this.input.addEventListener('click', e => {
-            e.stopPropagation();
-        });
-        this.input.addEventListener('keydown', e => {
-            if (e.key === 'Escape') this.endInput(true);
-            if (e.key === 'Enter') this.endInput();
-        });
-        Object.assign(this.input.style, {
-            padding: '0 2px',
-            border: 'none',
-            margin: '0',
-            borderRadius: '4px',
-            boxSizing: 'border-box',
-        });
-        this.inputContainer.addEventListener('click', () => {
-            this.endInput();
-        });
-
-        this.codeMirrorNode = document.createElement('div');
-        this.codeMirrorNode.className = 'asct-cm';
-        this.codeMirrorNode.style.position = 'absolute';
-        this.codeMirrorNode.style.top = this.codeMirrorNode.style.left = 0;
-        this.codeMirrorNode.style.zIndex = 1;
-        this.codeMirrorNode.style.display = 'none';
-
-        this.extras = new ExtrasRoot();
-
-        this.node.appendChild(this.svgNode);
-        this.node.appendChild(this.codeMirrorNode);
-        this.node.appendChild(this.extras.node);
-        this.node.appendChild(this.inputContainer);
-
         this.ctx = {
-            scheduleLayout: this.scheduleLayout,
-            scheduleDisplay: this.scheduleDisplay,
-            scheduleCommitAfterLayout: this.scheduleCommitAfterLayout,
-            nodesAtPoint: this.getNodesAtPoint,
-            beginInput: this.beginInput,
-            beginCapture: this.beginCapture,
-            push: this.ctxPush,
-            codeMirrorNode: this.codeMirrorNode,
-            get codeMirror () {
-                return self._getCodeMirror();
+            render: {
+                scheduleLayout: this.scheduleLayout,
+                scheduleDisplay: this.scheduleDisplay,
+                scheduleCommitAfterLayout: this.scheduleCommitAfterLayout,
             },
-            extras: this.extras,
+            nodesAtPoint: this.getNodesAtPoint,
+            push: this.ctxPushWindow,
         };
     }
-
-    _getCodeMirror = () => {
-        if (!this.codeMirror) {
-            // we need to init this lazily because it breaks if we initialize it during creation
-            this.codeMirror = CodeMirror(this.codeMirrorNode, {
-                lineSeparator: '\n',
-                indentUnit: 4,
-                lineNumbers: true,
-                value: '',
-                mode: 'asct',
-            });
-            this.codeMirror.getWrapperElement().style.height = '100%';
-        }
-        return this.codeMirror;
-    };
 
     #trackedPointers = new Map();
     beginPointer = pointer => {
@@ -168,10 +107,10 @@ export class ViewRoot {
     };
 
     getTargetsAtPoint = (x, y) => {
-        const stackBot = this.stack[0];
-        if (!stackBot) return [];
+        const stackTop = this.windows[this.windows.length - 1];
+        if (!stackTop) return [];
         const targets = [];
-        this.#getNodesAtPointInner(x, y, 0, 0, stackBot.layer, targets);
+        this.#getNodesAtPointInner(x, y, 0, 0, stackTop.layer, targets);
         return targets;
     };
     getNodesAtPoint = (x, y) => {
@@ -293,81 +232,44 @@ export class ViewRoot {
         this.updateRootSizes();
     }
 
-    /// Pushes a root view.
-    push (view) {
-        this.stack.push(view);
+    /// Pushes a window.
+    pushWindow (view) {
+        this.windows.push(view);
         this.svgNode.appendChild(view.layer.node);
         view.layer.didMount(this.ctx);
+        view.didAttach(this.ctx);
+        view.didMount(null);
 
         this.updateRootSizes();
     }
-    pop () {
-        const view = this.stack.pop();
+    popWindow () {
+        const view = this.windows.pop();
         if (!view) return;
         this.svgNode.removeChild(view.layer.node);
-        if (!view.layer.parent) view.layer.didUnmount();
+        if (!view.parent) {
+            view.didUnmount();
+            view.didDetach();
+        }
     }
 
-    ctxPush = view => {
-        const popAtSize = this.stack.length;
-        this.push(view);
+    ctxPushWindow = view => {
+        const popAtSize = this.windows.length;
+        this.pushWindow(view);
         return {
             pop: () => {
-                while (this.stack.length > popAtSize) this.pop();
+                while (this.windows.length > popAtSize) this.popWindow();
             },
         };
     };
 
     updateRootSizes () {
-        for (const item of this.stack) {
+        for (const item of this.windows) {
             if (!item.wantsRootSize) continue;
             if (item.size[0] === this.width && item.size[1] === this.height) continue;
             item.size = [this.width, this.height];
             item.needsLayout = true;
         }
     }
-
-    inputOriginal = null;
-    inputPromise = null;
-    beginInput = ([x, y], [width, height], text, style = {}) => new Promise((resolve) => {
-        this.endInput();
-
-        this.inputContainer.style.display = 'block';
-        Object.assign(this.input.style, style);
-        this.input.style.transform = `translate(${x}px, ${y}px)`;
-        this.input.style.width = width + 'px';
-        this.input.style.height = height + 'px';
-        this.input.style.lineHeight = height + 'px';
-        this.input.value = text;
-        this.inputOriginal = text;
-        this.input.focus();
-        setTimeout(() => this.input.focus(), 30); // sometimes it doesn't focus
-        this.inputPromise = resolve;
-    });
-    endInput (cancel) {
-        this.inputContainer.style.display = 'none';
-        if (!this.inputPromise) return;
-        const resolve = this.inputPromise;
-        resolve((cancel ? this.inputOriginal : this.input.value).normalize());
-        this.inputPromise = null;
-    }
-
-    beginCapture = (target) => {
-        const targetPos = target.absolutePosition;
-
-        this.capturedInputTarget = {
-            target,
-            x: targetPos[0],
-            y: targetPos[1],
-        };
-
-        return {
-            end: this.endCapture,
-        };
-    };
-    endCapture = () => {
-        this.capturedInputTarget = null;
-    };
 
     // animation loop handling
     animationLoopId = 0;
@@ -398,6 +300,7 @@ export class ViewRoot {
         this.startLoop(true);
     };
 
+    /// Starts the animation loop.
     startLoop (defer) {
         if (this.animationLoop) return;
         this.animationLoop = true;
@@ -407,6 +310,7 @@ export class ViewRoot {
         else this.loop(id);
     }
 
+    /// Animation loop.
     loop = id => {
         if (id !== this.animationLoopId) return;
         if (this.animationLoop) requestAnimationFrame(() => this.loop(id));

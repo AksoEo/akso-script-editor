@@ -1,6 +1,5 @@
 import config from './config';
-import { View } from './view';
-import { TextLayer, Transaction } from './layer';
+import { View, TextLayer, Transaction } from './ui';
 
 export class Toolbar extends View {
     constructor () {

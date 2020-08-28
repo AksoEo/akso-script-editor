@@ -1,6 +1,5 @@
-import { View } from './view';
+import { View, Layer, TextLayer, ArrowLayer, PathLayer, Transaction } from './ui';
 import { getProtoView } from './proto-pool';
-import { Layer, TextLayer, ArrowLayer, PathLayer, Transaction } from './layer';
 import { evalExpr } from './model';
 import { Dropdown } from './dropdown';
 import config from './config';
@@ -22,6 +21,7 @@ export class ExprSlot extends View {
     }
 
     didUnmount () {
+        super.didUnmount();
         this.dragController.unregisterTarget(this);
     }
 

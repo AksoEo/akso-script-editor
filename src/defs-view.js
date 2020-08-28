@@ -1,8 +1,7 @@
 import dagre from 'dagre';
-import { View } from './view';
+import { View, TextLayer, ArrowLayer, Transaction } from './ui';
 import { viewPool, getProtoView } from './proto-pool';
 import config from './config';
-import { TextLayer, ArrowLayer, Transaction } from './layer';
 import { ExprSlot, ExprView } from './expr-view';
 import { remove as removeNode } from './model';
 
