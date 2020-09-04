@@ -1,9 +1,9 @@
 import { VMFun } from '@tejo/akso-script';
-import { View, Layer, TextLayer, Transaction } from './ui';
+import { View, Layer, TextLayer, Transaction, Gesture } from './ui';
 import { ExprView } from './expr-view';
 import { getProtoView } from './proto-pool';
 import { makeStdRefs, createContext, evalExpr } from './model';
-import Scrollbar from './scrollbar';
+import { Scrollbar } from './scrollbar';
 import config from './config';
 
 /// This is the library of objects on the left-hand side.
@@ -231,7 +231,7 @@ class SideTabs extends View {
             });
         }
 
-        this.needsLayout = true;
+        Gesture.onTap(this, null, this.onTapStart);
     }
 
     eventBounds = [];
@@ -266,15 +266,20 @@ class SideTabs extends View {
         this.layer.size = [width, this.height];
     }
 
-    onPointerStart ({ y }) {
-        const t = new Transaction(1, 0.3);
+    getItemAtY = y => {
         for (const bound of this.eventBounds) {
             if (bound.y <= y && bound.endY > y) {
-                this.onSelect(bound.id);
+                return bound.id;
             }
         }
+    };
+
+    onTapStart = ({ y }) => {
+        const t = new Transaction(1, 0.3);
+        const item = this.getItemAtY(y);
+        if (item) this.onSelect(item);
         t.commitAfterLayout(this.ctx);
-    }
+    };
 
     *iterSublayers () {
         for (const layer of this.tabLayers) {
@@ -292,9 +297,20 @@ class Scrollable extends View {
 
         this.scrollbar = new Scrollbar();
         this.scrollbar.onScroll = dy => this.onScroll({ dy });
+
+        Gesture.onScroll(this, this.onScroll);
     }
 
     scroll = 0;
+
+    didAttach (ctx) {
+        super.didAttach(ctx);
+
+        // HACK: force update scrollbar
+        setTimeout(() => {
+            this.needsLayout = true;
+        }, 100);
+    }
 
     layout () {
         super.layout();
@@ -372,6 +388,12 @@ class ExprFactory extends View {
             this.needsLayout = true;
         });
         this.expr = makeExpr(this.exprCtx, true);
+
+        this.exprView = new ExprView(this.expr);
+        this.exprView.noInteraction = true;
+        this.exprView._isDemo = true;
+        this.exprView.decorationOnly = true;
+        this.addSubview(this.exprView);
     }
 
     wantsChildLayout = true;
@@ -379,17 +401,14 @@ class ExprFactory extends View {
     update = makeExpr => {
         this.makeExpr = makeExpr;
         this.expr = makeExpr(this.exprCtx, true);
-        this.needsLayout = true;
+        this.exprView.expr = this.expr;
+        this.exprView.needsLayout = true;
     };
 
     layout () {
         super.layout();
-        const exprView = getProtoView(this.expr, ExprView);
-        exprView.noInteraction = true;
-        exprView._isDemo = true;
-        exprView.decorationOnly = true;
-        exprView.layoutIfNeeded();
-        this.layer.size = exprView.size;
+        this.exprView.layoutIfNeeded();
+        this.layer.size = this.exprView.size;
     }
 
     #dragStartPos = [0, 0];
@@ -441,9 +460,5 @@ class ExprFactory extends View {
             exprView.position = [16, 16];
             t.commit();
         }
-    }
-
-    *iterSubviews () {
-        yield getProtoView(this.expr, ExprView);
     }
 }

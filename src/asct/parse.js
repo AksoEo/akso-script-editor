@@ -33,6 +33,7 @@ class TokenCursor {
         this.proxy = null;
         this.errors = [];
         this.ctx = ctx;
+        this.prevTok = null;
     }
 
     peek () {
@@ -44,10 +45,16 @@ class TokenCursor {
         return t;
     }
 
+    span () {
+        if (this.eof()) return this.prevTok.span;
+        return this.peek().span;
+    }
+
     next () {
         const t = this.peek();
         this.pos[this.pos.length - 1]++;
         this.errors = [];
+        this.prevTok = t;
         return t;
     }
 
@@ -101,9 +108,9 @@ class TokenCursor {
 
     getCurrentError (fallback = 'unknown error') {
         if (this.errors.length) {
-            return new ParseError(this.errors);
+            return new ParseError(this.errors, this.clone());
         }
-        return new ParseError(fallback);
+        return new ParseError(fallback, this.clone());
     }
 }
 
@@ -133,6 +140,10 @@ class ParseError {
     }
     valueOf () {
         return `[ParseError ${this.toString()}]`;
+    }
+    getSpan () {
+        if (!this.state) return null;
+        return this.state.span();
     }
 }
 

@@ -23,18 +23,32 @@ export class CanvasView extends View {
 
         this.modelCtx = createContext();
         this.modelCtx.onMutation(this.#onMutation);
+        this.modelCtx.onStartMutation(this.#onStartMutation);
+        this.modelCtx.onFlushMutation(this.#onFlushMutation);
         this.root = fromRawDefs({}, this.modelCtx);
         this.defsView = new DefsView(this.root);
         this.library = new Library(this.defsView);
         this.library.onRequestLinearView = () => this.exitGraphView();
     }
 
+    #mutations = null;
+    #onStartMutation = () => {
+        this.#mutations = new Set();
+    };
     #onMutation = node => {
         // set needsLayout on the representing view when a model node is mutated
         const view = viewPool.get(node);
-        if (view) view.needsLayout = true;
+        if (view) {
+            view.needsLayout = true;
+            if (this.#mutations) this.#mutations.add(view);
+        }
         this.defsView.needsLayout = true;
         this.resolveRefs();
+    };
+    #onFlushMutation = () => {
+        this.defsView.layoutIfNeeded();
+        for (const m of this.#mutations) m.layoutIfNeeded();
+        this.#mutations = null;
     };
 
     get isInGraphView () {

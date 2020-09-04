@@ -23,6 +23,8 @@ import config from './config';
 
 export function createContext () {
     const mutationListeners = [];
+    const startMutListeners = [];
+    const flushListeners = [];
     const fvMutationListeners = [];
     return {
         onMutation: listener => mutationListeners.push(listener),
@@ -46,11 +48,66 @@ export function createContext () {
                 }
             }
         },
+        onStartMutation: listener => startMutListeners.push(listener),
+        onFlushMutation: listener => flushListeners.push(listener),
+        startMutation: () => {
+            for (const listener of startMutListeners) {
+                try {
+                    listener();
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        },
+        flushMutation: () => {
+            for (const listener of flushListeners) {
+                try {
+                    listener();
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        },
     };
 }
 
 export function makeRef (name, ctx) {
     return { ctx, type: 'r', name };
+}
+
+function cloneExprObject (expr) {
+    if (typeof expr !== 'object') return expr;
+    if (expr.type === 'c') {
+        return {
+            type: 'c',
+            func: cloneExprObject(expr.func),
+            args: expr.args.map(cloneExprObject),
+        };
+    } else if (expr.type === 'f') {
+        // FIXME: body needs to be cloned too
+        return {
+            type: 'f',
+            params: [...expr.params],
+            body: expr.body,
+        };
+    } else if (expr.type === 'w') {
+        return {
+            type: 'w',
+            matches: expr.matches.map(match => {
+                const m = {};
+                if ('cond' in match) m.cond = cloneExprObject(match.cond);
+                m.value = cloneExprObject(match.value);
+            }),
+        };
+    } else if (expr.type === 'l') {
+        return { type: 'l', value: expr.value.map(cloneExprObject) };
+    } else if (expr.type === 'm') {
+        const cloneMatrix = o => {
+            if (Array.isArray(o)) return o.map(cloneMatrix);
+            else return o;
+        };
+        return { type: 'm', value: cloneMatrix(expr.value) };
+    } else return { ...expr };
 }
 
 /// Converts raw defs to editor defs.
@@ -73,7 +130,7 @@ export function fromRawDefs (defs, ctx) {
             return makeRef(name, ctx);
         }
 
-        if (subexprCache.has(name)) return { ...subexprCache.get(name) };
+        if (subexprCache.has(name)) return cloneExprObject(subexprCache.get(name));
 
         if (subexprLocks.has(name) || !defs[name] || forceRef) {
             // EITHER a)
@@ -316,8 +373,10 @@ export function remove (node) {
     }
 
     node.parent = null;
+    node.ctx.startMutation();
     node.ctx.notifyMutation(parent);
     node.ctx.notifyMutation(node);
+    node.ctx.flushMutation();
 }
 
 export function makeStdRefs () {

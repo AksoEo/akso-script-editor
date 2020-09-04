@@ -1,7 +1,7 @@
-import { View, Layer } from './ui';
+import { View, Layer, Transaction, Gesture } from './ui';
 import config from './config';
 
-export default class Scrollbar extends View {
+export class Scrollbar extends View {
     edgeX = 0;
     height = 0;
     scrollMax = 0;
@@ -19,6 +19,9 @@ export default class Scrollbar extends View {
         this.thumbLayer.cornerRadius = config.cornerRadius;
 
         this.needsLayout = true;
+
+        Gesture.onTap(this, this.onTap);
+        Gesture.onDrag(this, this.onDragMove);
     }
 
     layout () {
@@ -48,20 +51,32 @@ export default class Scrollbar extends View {
         }
     }
 
-    #lastDragPos = 0;
-    onPointerStart ({ absY }) {
-        this.#lastDragPos = absY;
-        this.thumbLayer.background = config.scrollbar.hoverThumb;
-    }
-    onPointerDrag({ absY }) {
-        const screenDelta = absY - this.#lastDragPos;
-        this.#lastDragPos = absY;
-
+    onDragMove = ({ dy }) => {
         const scale = this.scrollMax / (this.size[1] - this.thumbLayer.size[1]);
-        this.onScroll(screenDelta * scale);
+        this.onScroll(dy * scale);
+    };
+
+    onTap = ({ y }) => {
+        // scroll burst when the user clicks above or below the thumb
+        if (y < this.thumbLayer.position[1]) this.scrollBurst(-1);
+        else if (y > this.thumbLayer.position[1] + this.thumbLayer.size[1]) this.scrollBurst(1);
+    };
+
+    scrollBurst (dir) {
+        const t = new Transaction(1, 0.5);
+        this.onScroll(dir * Math.max(Math.min(this.size[1], 100), this.size[1] / 3));
+        t.commitAfterLayout(this.ctx);
     }
-    onPointerEnd () {
+
+    onPointerEnter () {
+        const t = new Transaction(1, 0.1);
+        this.thumbLayer.background = config.scrollbar.hoverThumb;
+        t.commit();
+    }
+    onPointerExit () {
+        const t = new Transaction(1, 0.5);
         this.thumbLayer.background = config.scrollbar.thumb;
+        t.commit();
     }
 
     *iterSublayers () {

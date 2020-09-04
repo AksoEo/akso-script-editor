@@ -1,5 +1,5 @@
+import { View, TextLayer, Transaction, Gesture } from './ui';
 import config from './config';
-import { View, TextLayer, Transaction } from './ui';
 
 export class Toolbar extends View {
     constructor () {
@@ -9,7 +9,6 @@ export class Toolbar extends View {
 
         this.buttons = [
             new Button('Select', () => {}),
-            new Button('Move', () => {}),
             new Button('MathExpr', () => {}),
             new Button('Help', () => {}),
             new Button('Graph', this.toggleGraphView),
@@ -73,6 +72,17 @@ class Button extends View {
         this.label.text = label;
         this.label.font = config.identFont;
         this.needsLayout = true;
+
+        Gesture.onTap(this, () => this.onClick(this), this.onTapStart, this.onTapEnd);
+    }
+
+    #active = false;
+    get active () {
+        return this.#active;
+    }
+    set active (v) {
+        this.#active = v;
+        this.needsLayout = true;
     }
 
     layout () {
@@ -107,19 +117,18 @@ class Button extends View {
         this.layout();
         t.commit();
     }
-    onPointerStart () {
-        this.onClick(this);
-        const t = new Transaction(1, 0);
+    onTapStart = () => {
+        const t = new Transaction(0, 0);
         this.pressed = true;
         this.layout();
         t.commit();
-    }
-    onPointerEnd () {
+    };
+    onTapEnd = () => {
         const t = new Transaction(1, 0.3);
         this.pressed = false;
         this.layout();
         t.commit();
-    }
+    };
 
     *iterSublayers () {
         yield this.label;

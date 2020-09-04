@@ -1,5 +1,6 @@
 import PointerTracker from 'pointer-tracker';
 import { svgNS } from './layer/base';
+import { Gesture } from './gesture';
 
 /// View root handler. Handles interfacing with the DOM and time.
 export class ViewRoot {
@@ -17,6 +18,10 @@ export class ViewRoot {
         this.node.style.position = 'relative';
 
         this.node.appendChild(this.svgNode);
+
+        this.node.addEventListener('touchstart', e => e.preventDefault());
+        this.node.addEventListener('touchmove', e => e.preventDefault());
+        this.node.addEventListener('touchend', e => e.preventDefault());
 
         // TODO: fix this
         const self = this;
@@ -46,6 +51,7 @@ export class ViewRoot {
                 scheduleCommitAfterLayout: this.scheduleCommitAfterLayout,
             },
             nodesAtPoint: this.getNodesAtPoint,
+            beginCapture: this.beginCapture,
             push: this.ctxPushWindow,
         };
     }
@@ -56,26 +62,47 @@ export class ViewRoot {
         const x = pointer.clientX - rect.left;
         const y = pointer.clientY - rect.top;
 
-        let chosenTarget;
+        let candidates;
 
         if (this.capturedInputTarget) {
-            chosenTarget = this.capturedInputTarget;
+            candidates = [this.capturedInputTarget];
         } else {
             const targets = this.getTargetsAtPoint(x, y, true);
-            chosenTarget = targets[targets.length - 1]; // last target is on top due to DFS order
+            // targets are sorted by depth, so the last one will be deepest and should have the
+            // highest priority
+            candidates = targets.reverse();
         }
 
-        if (chosenTarget && chosenTarget.target.onPointerStart) {
-            chosenTarget.target.onPointerStart({
-                x: x - chosenTarget.x,
-                y: y - chosenTarget.y,
-                absX: x,
-                absY: y,
-            });
+        const chosenTargets = [];
+        let gestures = [];
+        const gestureTypes = new Set();
+        let highestPriority = -Infinity;
+        for (const candidate of candidates) {
+            const g = candidate.target.getGesturesForType(Gesture.Type.POINTER, event.pointerType);
+            if (g.length) {
+                chosenTargets.push(candidate);
+                for (const gesture of g) {
+                    // use only the first (deepest) gesture of each type
+                    if (gestureTypes.has(gesture.type)) continue;
+                    highestPriority = Math.max(highestPriority, gesture.priority);
+                    gestures.push({ gesture, target: candidate });
+                    gestureTypes.add(gesture.type);
+                }
+            }
         }
+
+        gestures = gestures.filter(({ gesture }) => gesture.priority >= highestPriority);
+
+        for (const { gesture, target } of gestures) gesture.onPointerStart({
+            x: x - target.x,
+            y: y - target.y,
+            absX: x,
+            absY: y,
+        });
 
         this.#trackedPointers.set(pointer.id, {
-            targets: [chosenTarget].filter(x => x),
+            targets: chosenTargets,
+            gestures,
         });
     };
 
@@ -122,16 +149,26 @@ export class ViewRoot {
         const x = pointer.clientX - rect.left;
         const y = pointer.clientY - rect.top;
 
-        const { targets } = this.#trackedPointers.get(pointer.id);
+        const tracked = this.#trackedPointers.get(pointer.id);
+        const { gestures } = tracked;
 
-        for (const target of targets) {
-            if (target.target.onPointerDrag) {
-                target.target.onPointerDrag({
-                    x: x - target.x,
-                    y: y - target.y,
-                    absX: x,
-                    absY: y,
-                });
+        let highestPriority = -Infinity;
+        for (const { gesture, target } of gestures) {
+            gesture.onPointerDrag({
+                x: x - target.x,
+                y: y - target.y,
+                absX: x,
+                absY: y,
+            });
+            highestPriority = Math.max(highestPriority, gesture.priority);
+        }
+
+        tracked.gestures = [];
+        for (const item of gestures) {
+            if (item.gesture.priority >= highestPriority) {
+                tracked.gestures.push(item);
+            } else {
+                item.gesture.onPointerCancel();
             }
         }
     };
@@ -140,18 +177,16 @@ export class ViewRoot {
         const x = pointer.clientX - rect.left;
         const y = pointer.clientY - rect.top;
 
-        const { targets } = this.#trackedPointers.get(pointer.id);
+        const { gestures } = this.#trackedPointers.get(pointer.id);
         this.#trackedPointers.delete(pointer.id);
 
-        for (const target of targets) {
-            if (target.target.onPointerEnd) {
-                target.target.onPointerEnd({
-                    x: x - target.x,
-                    y: y - target.y,
-                    absX: x,
-                    absY: y,
-                });
-            }
+        for (const { gesture, target } of gestures) {
+            gesture.onPointerEnd({
+                x: x - target.x,
+                y: y - target.y,
+                absX: x,
+                absY: y,
+            });
         }
     };
 
@@ -207,12 +242,27 @@ export class ViewRoot {
 
         for (let i = targets.length - 1; i >= 0; i--) {
             const { target } = targets[i];
-            if (target.onScroll) {
+            const gestures = target.getGesturesForType(Gesture.Type.SCROLL, null);
+            if (gestures.length) {
                 event.preventDefault();
-                target.onScroll({ dx: event.deltaX, dy: event.deltaY });
+                gestures.map(g => g.onScroll({ dx: event.deltaX, dy: event.deltaY }));
                 break;
             }
         }
+    };
+
+    /// Starts capturing all input and directing it to the given target.
+    beginCapture = target => {
+        const targetPos = target.absolutePosition;
+        this.capturedInputTarget = {
+            target,
+            x: targetPos[0],
+            y: targetPos[1],
+        };
+        return { end: this.endCapture };
+    };
+    endCapture = () => {
+        this.capturedInputTarget = null;
     };
 
     get width () {

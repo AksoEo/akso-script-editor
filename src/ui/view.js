@@ -6,6 +6,9 @@ import { Layer } from './layer';
 export class View {
     layer = new Layer(this);
 
+    /// Gesture recognizers.
+    gestures = new Set();
+
     /// Set this to true to have your own needsLayout set to true when a child updates.
     wantsChildLayout = false;
 
@@ -90,10 +93,13 @@ export class View {
 
     addSubview (view) {
         if (this.#subviews.includes(view)) return;
-        if (view.parent) throw new Error('View is still mounted somewhere');
+        if (view.parent) {
+            console.warn('View is still mounted somewhere', 'self, other parent, subview:', this, view.parent, view);
+            view.parent.removeSubview(view);
+        }
         this.#subviews.push(view);
         this.layer.addSublayer(view.layer);
-        if (this.ctx) view.didAttach(this.ctx);
+        if (this.ctx) view.didAttach(this.createSubContext());
         view.didMount(this);
     }
     removeSubview (view) {
@@ -166,14 +172,45 @@ export class View {
         this.layer.needsDisplay = true;
     }
 
+    getGesturesForType (...args) {
+        const gestures = [];
+        for (const g of this.gestures) {
+            const handler = g.getHandlerForType(...args);
+            if (handler) gestures.push(handler);
+        }
+        return gestures;
+    }
+
+    /// Override this in subclasses to provide different child contexts.
+    /// These will be provided in *addition* to parent context values.
+    getSubCtx () {
+        return {};
+    }
+
+    #cachedSubContext = null;
+    createSubContext () {
+        if (this.#cachedSubContext) return this.#cachedSubContext;
+        const ctx = this.getSubCtx();
+        if (!Object.keys(ctx).length) return this.ctx;
+        const pctx = this.ctx;
+        const sctx = Object.create(pctx); // use parent context as prototype
+        Object.assign(sctx, ctx);
+        this.#cachedSubContext = sctx;
+        return sctx;
+    }
+
     /// Fired when this view is attached to a context.
     didAttach (ctx) {
         this.ctx = ctx;
         if (this.ctx) this.ctx.render.scheduleLayout(this);
-        for (const view of this.#subviews) view.didAttach(ctx);
+        const subCtx = this.createSubContext();
+        for (const view of this.#subviews) view.didAttach(subCtx);
     }
-    /// Fired when this view is detached from the current context.
+    /// Fired before this view is detached from the current context.
+    willDetach () {}
+    /// Fired after this view is detached from the current context.
     didDetach () {
+        this.willDetach();
         this.ctx = null;
         for (const view of this.#subviews) view.didDetach();
     }

@@ -60,7 +60,7 @@ class StrCursor {
     }
 }
 
-class LexError {
+export class LexError {
     constructor (msgOrErrs) {
         this.contents = msgOrErrs;
     }
@@ -73,6 +73,16 @@ class LexError {
     }
     valueOf () {
         return `[LexError ${this.toString()}]`;
+    }
+    getSpan () {
+        if (this.span) return this.span;
+        if (Array.isArray(this.contents)) {
+            for (const c of this.contents) {
+                const s = c.getSpan();
+                if (s) return s;
+            }
+        }
+        return null;
     }
 }
 

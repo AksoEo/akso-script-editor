@@ -3,6 +3,7 @@
 import { Window, ViewRoot } from './ui';
 import { EditorView } from './editor-view';
 import { CodeEditor } from './code-editor';
+import { TextInput } from './text-input';
 import { ExtrasRoot } from './extras';
 import { lex } from './asct/lex';
 import { parse } from './asct/parse';
@@ -14,6 +15,7 @@ export { lex, parse, write };
 export default class Editor {
     root = new ViewRoot();
     editor = new EditorView();
+    textInput = new TextInput();
     codeEditor = new CodeEditor();
     extras = new ExtrasRoot();
 
@@ -22,12 +24,13 @@ export default class Editor {
         win.addSubview(this.editor);
         this.root.pushWindow(win);
 
+        this.root.node.appendChild(this.textInput.node);
+        this.root.ctx.beginInput = this.textInput.beginInput;
+
         this.root.node.appendChild(this.codeEditor.node);
         this.root.ctx.codeMirrorNode = this.codeEditor.node;
         Object.defineProperty(this.root.ctx, 'codeMirror', {
-            get () {
-                return this.codeEditor.get();
-            },
+            get: () => this.codeEditor.get(),
             enumerable: true,
         });
 

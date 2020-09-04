@@ -1,4 +1,4 @@
-import { View, Layer, TextLayer, PathLayer, Transaction } from './ui';
+import { Window, View, Layer, TextLayer, PathLayer, Transaction, Gesture } from './ui';
 import config from './config';
 
 /// A dropdown.
@@ -18,8 +18,9 @@ export class Dropdown extends View {
         this.layer.strokeWidth = config.primitives.outlineWeight;
         this.layer.cornerRadius = config.cornerRadius;
 
-        this.anchorLayer = new Layer();
-        this.addSublayer(this.anchorLayer);
+        this.anchorView = new View();
+        this.anchorLayer = this.anchorView.layer;
+        this.addSubview(this.anchorView);
 
         this.bgLayer = new Layer();
         this.bgLayer.background = this.layer.background;
@@ -39,7 +40,8 @@ export class Dropdown extends View {
         this.labels = new Map();
 
         this.anchored = true;
-        this.needsLayout = true;
+
+        Gesture.rawPointerCapture(this, this.onPointerStart, this.onPointerDrag, this.onPointerEnd, this.onPointerCancel);
     }
 
     #expr;
@@ -110,23 +112,18 @@ export class Dropdown extends View {
 
         if (this.#expanded) {
             if (this.anchored) {
+                // the content view is anchored to this view, but we actually want it in its own
+                // window
                 this.anchored = false;
-                this.layer.removeSublayer(this.anchorLayer);
-                const t = new Transaction(1, 0);
-                // push a fake view proxy
-                const viewProxy = {
-                    layer: this.anchorLayer,
-                    didMount: () => {},
-                    didAttach: () => {},
-                    didUnmount: () => {},
-                    didDetach: () => {},
-                    sublayers: null,
-                    subviews: null,
-                };
-                viewProxy.layer.owner = viewProxy;
-
-                this.worldAnchor = this.ctx.push(viewProxy);
-                this.anchorLayer.position = this.absolutePosition;
+                this.removeSubview(this.anchorView);
+                const t = new Transaction(0, 0);
+                const win = new Window();
+                const windowRoot = new View();
+                win.addSubview(windowRoot);
+                windowRoot.addSubview(this.anchorView);
+                this.worldAnchor = this.ctx.push(win);
+                this.capture = this.ctx.beginCapture(this);
+                this.anchorView.position = this.absolutePosition;
                 t.commit();
             }
 
@@ -195,10 +192,17 @@ export class Dropdown extends View {
         } else {
             if (!this.anchored) {
                 this.anchored = true;
-                if (this.worldAnchor) this.worldAnchor.pop();
-                this.anchorLayer.owner = null;
+                if (this.worldAnchor) {
+                    this.worldAnchor.pop();
+                    this.anchorView.parent.removeSubview(this.anchorView);
+                    this.addSubview(this.anchorView);
+                }
+                if (this.capture) {
+                    this.capture.end();
+                    this.capture = null;
+                }
                 const t = new Transaction(1, 0);
-                this.anchorLayer.position = [0, 0];
+                this.anchorView.position = [0, 0];
                 t.commit();
             }
 
@@ -242,14 +246,14 @@ export class Dropdown extends View {
         this.dragStart = [x, y];
         this.didDragSelect = false;
         t.commitAfterLayout(this.ctx);
-        this.inputCapture = this.ctx.beginCapture(this);
+    }
+    collapse () {
+        const t = new Transaction(1, 0.3);
+        this.expanded = false;
+        t.commitAfterLayout(this.ctx);
+        this.dragStart = null;
     }
     selectAndCollapse (x, y) {
-        if (this.inputCapture) {
-            this.inputCapture.end();
-            this.inputCapture = null;
-        }
-
         let hit = null;
         if (x >= 0 && x < this.hitWidth) {
             for (const [tby, ty, target] of this.hitTargets) {
@@ -272,11 +276,11 @@ export class Dropdown extends View {
         this.dragStart = null;
     }
 
-    onPointerStart ({ x, y }) {
+    onPointerStart = ({ x, y }) => {
         if (this.expanded) this.selectAndCollapse(x, y);
         else this.expand(x, y);
-    }
-    onPointerDrag (event) {
+    };
+    onPointerDrag = (event) => {
         if (this.expanded) {
             this.onPointerMove(event);
 
@@ -287,13 +291,16 @@ export class Dropdown extends View {
             }
             this.lastLocation = [x, y];
         }
-    }
-    onPointerEnd () {
+    };
+    onPointerEnd = () => {
         if (this.didDragSelect) {
             const [x, y] = this.lastLocation;
             this.selectAndCollapse(x, y);
         }
-    }
+    };
+    onPointerCancel = () => {
+        this.collapse();
+    };
     onPointerEnter () {
         this.hovering = true;
         const t = new Transaction(1, 0.3);

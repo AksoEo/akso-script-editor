@@ -53,3 +53,10 @@
 .asct-cm .CodeMirror .cm-list {
     color: #00c2e6;
 }
+.asct-cm .CodeMirror .asct-error-line {
+    background: rgba(244, 67, 54, 0.2);
+}
+.asct-cm .CodeMirror .asct-error-message {
+    font-family: Avenir Next, Museo Sans, Roboto, Ubuntu, Cantarell, sans-serif;
+    font-size: small;
+}

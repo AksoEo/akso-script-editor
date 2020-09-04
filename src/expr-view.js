@@ -1,14 +1,20 @@
-import { View, Layer, TextLayer, ArrowLayer, PathLayer, Transaction } from './ui';
+import { View, PortalView, Layer, TextLayer, ArrowLayer, PathLayer, Transaction, Gesture } from './ui';
 import { getProtoView } from './proto-pool';
 import { evalExpr } from './model';
 import { Dropdown } from './dropdown';
+import { Tooltip } from './tooltip';
 import config from './config';
 
-/// Renders a slot for an expression.
+/// Renders a slot for an expression, or UI if this field has a spec.
 export class ExprSlot extends View {
+    // currently contained expr
     #expr = null;
+    // currently contained expr UI
+    #exprUI = null;
     wantsChildLayout = true;
+    // field spec
     spec = null;
+    // model ctx
     exprCtx = null;
 
     constructor (onInsertExpr, exprCtx) {
@@ -30,8 +36,20 @@ export class ExprSlot extends View {
     }
     set expr (value) {
         if (this.#expr === value) return;
+        if (this.#expr) this.removeSubview(getProtoView(this.#expr, ExprView));
         this.#expr = value;
         this.needsLayout = true;
+        if (this.#expr) this.addSubview(getProtoView(this.#expr, ExprView));
+    }
+
+    get exprUI () {
+        return this.#exprUI;
+    }
+    set exprUI (value) {
+        if (this.#exprUI === value) return;
+        if (this.#exprUI) this.removeSubview(this.#exprUI);
+        this.#exprUI = value;
+        if (this.#exprUI) this.addSubview(this.#exprUI);
     }
 
     get isEmpty () {
@@ -124,38 +142,22 @@ export class ExprSlot extends View {
         }
         this.layer.size = exprSize;
     }
-
-    *iterSubviews () {
-        if (this.exprUI) {
-            yield this.exprUI;
-        } else if (this.expr) {
-            yield getProtoView(this.expr, ExprView);
-        }
-    }
 }
 
 /// Renders a runtime value.
 class PeekView extends View {
     #value = null;
-    #visible = false;
     analysis = { valid: false, type: null };
 
     constructor () {
         super();
+
+        this.tooltip = new Tooltip();
+        this.addSubview(this.tooltip);
+
         this.innerExpr = new ExprView({ type: 'u' });
         this.innerExpr.noInteraction = true;
-        this.needsLayout = true;
-
-        this.bgLayer = new Layer();
-        this.bgLayer.background = config.peek.background;
-        this.bgLayer.cornerRadius = 10;
-
-        this.arrowLayer = new ArrowLayer();
-        this.arrowLayer.arrowSize = 8;
-        this.arrowLayer.stroke = config.peek.background;
-        this.arrowLayer.strokeWidth = 4;
-
-        this.layer.opacity = 0;
+        this.tooltip.contents = this.innerExpr;
     }
 
     get decorationOnly () {
@@ -171,15 +173,12 @@ class PeekView extends View {
         this.needsLayout = true;
     }
     get visible () {
-        return this.#visible;
+        return this.tooltip.visible;
     }
     set visible (value) {
-        if (value === this.#visible) return;
-        this.#visible = value;
+        this.tooltip.visible = value;
         this.needsLayout = true;
     }
-
-    time = 0;
 
     layout () {
         const { value, innerExpr: ie } = this;
@@ -191,48 +190,10 @@ class PeekView extends View {
         else if (typeof value === 'function') ie.expr = { type: 's', value: '(todo: func expr)' };
         else ie.expr = { type: 's', value: `don’t know the type ${typeof value}` };
 
-        ie.layout();
+        this.tooltip.size = this.size;
 
-        const time = this.time;
-        this.time += 1 / 60; // close enough
-
-        const t = new Transaction(1, 0.2);
-        this.layer.opacity = this.#visible ? 1 : 0;
-
-        const offsetY = this.#visible ? 4 + 2 * Math.cos(time * 4) : 0;
-
-        ie.position = [-ie.size[0] / 2, -ie.size[1] - offsetY];
-
-        this.bgLayer.position = [
-            ie.position[0] - 6,
-            ie.position[1] - 6,
-        ];
-
-        t.commit();
-        this.bgLayer.size = [
-            ie.size[0] + 12,
-            ie.size[1] + 12,
-        ];
-
-        this.arrowLayer.start = [0, -10];
-        this.arrowLayer.control1 = [0, -10];
-        this.arrowLayer.control2 = [0, 0];
-        this.arrowLayer.end = [0, 8];
-
-        if (this.#visible) {
-            this.needsLayout = true;
-        } else {
-            this.time = 0;
-        }
-    }
-
-    *iterSublayers () {
-        yield this.arrowLayer;
-        yield this.bgLayer;
-    }
-
-    *iterSubviews () {
-        yield this.innerExpr;
+        this.innerExpr.layout();
+        this.tooltip.layoutIfNeeded();
     }
 }
 
@@ -244,6 +205,10 @@ export class ExprView extends View {
         super();
         this.expr = expr;
         this.updateImpl();
+
+        Gesture.onTap(this, () => {
+            if (this.impl$tapAction) this.impl$tapAction();
+        });
     }
 
     updateImpl () {
@@ -796,10 +761,12 @@ const EXPR_VIEW_IMPLS = {
 
             this.layer.size = [width, height];
 
-            this.peekView.position = [
+            /*this.peekView.position = [
                 width / 2,
-                -12,
-            ];
+                -4,
+            ];*/
+            this.peekView.position = [0, 0];
+            this.peekView.size = this.size;
         },
         *iterSublayers () {
             yield this.nameLayer;

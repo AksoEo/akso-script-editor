@@ -33,12 +33,14 @@ export class ArrowLayer extends BaseLayer {
         this.node.setAttribute('stroke', vec2rgb(this.#stroke.getWADynamic()));
         this.node.setAttribute('fill', 'none');
 
+        const fix = m => m.map(x => x.toFixed(3));
+
         const start = this.#start.getDynamic();
         const c1 = this.#control1.getDynamic();
         const c2 = this.#control2.getDynamic();
         const end = this.#end.getDynamic();
 
-        const d = `M ${start} C ${c1} ${c2} ${end}`;
+        const d = `M ${fix(start)} C ${fix(c1)} ${fix(c2)} ${fix(end)}`;
         this.node.setAttribute('d', d); // we need to set it here because we need to get points on it
 
         const arrowSize = this.#arrowSize.getDynamic()[0];
@@ -64,7 +66,7 @@ export class ArrowLayer extends BaseLayer {
                     end[1] + tipSize * Math.sin(tangentDir - Math.PI * 3 / 4),
                 ];
 
-                dTip = `M ${tip1} ${end} ${tip2}`;
+                dTip = `M ${fix(tip1)} ${fix(end)} ${fix(tip2)}`;
             }
 
             this.node.setAttribute('d', d + ' ' + dTip);

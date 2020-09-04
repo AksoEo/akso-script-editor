@@ -78,7 +78,7 @@ export class Layer extends BaseLayer {
         this.#position.waCommitCallback = waTransformCommit;
         this.#scale.waCommitCallback = waTransformCommit;
         this.#rotation.waCommitCallback = waTransformCommit;
-        this.#opacity.waCommitCallback = waPropCommit(this.fillNode, 'opacity', k => Math.max(0, Math.min(1, k[0])).toFixed(3));
+        this.#opacity.waCommitCallback = waPropCommit(this.node, 'opacity', k => Math.max(0, Math.min(1, k[0])).toFixed(3));
         this.#size.waCommitCallback = waSizeCommit;
         this.#cornerRadius.waCommitCallback = waPropCommit(this.fillNode, 'rx', k => k[0].toFixed(3) + 'px');
         this.#strokeWidth.waCommitCallback = waPropCommit(this.fillNode, 'strokeWidth', k => k[0].toFixed(3) + 'px');
@@ -178,7 +178,10 @@ export class Layer extends BaseLayer {
 
     addSublayer (layer) {
         this.#sublayers.add(layer);
-        if (layer.parent) throw new Error('Layer is still mounted somewhere');
+        if (layer.parent) {
+            console.warn('Layer is still mounted somewhere', 'self, other parent, sublayer:', this, layer.parent, layer);
+            layer.parent.removeSublayer(layer);
+        }
         layer.parent = this;
         layer.didMount(this.ctx);
         this.node.appendChild(layer.node);

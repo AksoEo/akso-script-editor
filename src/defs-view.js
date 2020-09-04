@@ -1,6 +1,7 @@
 import dagre from 'dagre';
-import { View, TextLayer, ArrowLayer, Transaction } from './ui';
+import { View, TextLayer, ArrowLayer, Transaction, Gesture } from './ui';
 import { viewPool, getProtoView } from './proto-pool';
+import { Scrollbar } from './scrollbar';
 import config from './config';
 import { ExprSlot, ExprView } from './expr-view';
 import { remove as removeNode } from './model';
@@ -19,10 +20,15 @@ export class DefsView extends View {
         this.scrollAnchor = new DefsAnchorView();
         this.defs = defs;
 
+        this.scrollbar = new Scrollbar();
+        this.scrollbar.onScroll = this.onScrollbarScrollY;
+
         this.trash = new Trash();
         this.trash.dragController = this.dragController;
 
         this.addDefView = new AddDefView(this.addDef);
+
+        Gesture.onScroll(this, this.onScroll);
     }
 
     /// List of arrows by source
@@ -48,11 +54,16 @@ export class DefsView extends View {
         t.commitAfterLayout(this.ctx);
     };
 
-    onScroll ({ dx, dy }) {
+    onScroll = ({ dx, dy }) => {
         this.scroll[0] += dx;
         this.scroll[1] += dy;
         this.needsLayout = true;
-    }
+    };
+
+    onScrollbarScrollY = (dy) => {
+        this.scroll[1] += dy;
+        this.needsLayout = true;
+    };
 
     get offset () {
         const pos = this.layer.absolutePosition;
@@ -181,14 +192,19 @@ export class DefsView extends View {
             const { maxWidth, y } = this.performLinearLayout();
             this.#arrows.clear();
 
-            if (!this.useGraphView) {
-                const minX = 0;
-                const maxX = Math.max(0, maxWidth - this.size[0]);
-                const minY = 0;
-                const maxY = Math.max(0, y - this.size[1]);
-                this.scroll[0] = Math.max(minX, Math.min(this.scroll[0], maxX));
-                this.scroll[1] = Math.max(minY, Math.min(this.scroll[1], maxY));
-            }
+            const minX = 0;
+            const maxX = Math.max(0, maxWidth - this.size[0]);
+            const minY = 0;
+            const maxY = Math.max(0, y - this.size[1]);
+            this.scroll[0] = Math.max(minX, Math.min(this.scroll[0], maxX));
+            this.scroll[1] = Math.max(minY, Math.min(this.scroll[1], maxY));
+
+            this.scrollbar.edgeX = this.size[0];
+            this.scrollbar.height = this.size[1];
+            this.scrollbar.scroll = this.scroll[1];
+            this.scrollbar.scrollMax = maxY;
+            this.scrollbar.layout();
+
             this.scrollAnchor.position = [-this.scroll[0], -this.scroll[1]];
         }
 
@@ -291,10 +307,12 @@ export class DefsView extends View {
     addFloatingExpr (expr) {
         this.defs.floatingExpr.add(expr);
         this.defs.ctx.notifyMutation(this.defs);
+        this.addSubview(getProtoView(expr, ExprView));
         this.flushSubviews();
     }
     removeFloatingExpr (expr) {
         this.defs.floatingExpr.delete(expr);
+        this.removeSubview(getProtoView(expr, ExprView));
         this.defs.ctx.notifyMutation(this.defs);
     }
 
@@ -320,9 +338,7 @@ export class DefsView extends View {
         this.scrollAnchor.flushSubviews();
         yield this.scrollAnchor;
         yield this.trash;
-        for (const expr of this.defs.floatingExpr) {
-            yield getProtoView(expr, ExprView);
-        }
+        if (!this.useGraphView) yield this.scrollbar;
     }
 }
 
@@ -505,10 +521,14 @@ class DefView extends View {
         new Transaction(1, 0.3).commitAfterLayout(this.ctx);
     };
 
+    set needsLayout (v) {
+        super.needsLayout = v;
+    }
+
     layout () {
         super.layout();
         this.refView.expr.name = this.def.name;
-        this.refView.layout();
+        this.refView.layoutIfNeeded();
         const nameSize = this.refView.size;
 
         // try to align left hand side if this is the linear view
@@ -676,6 +696,7 @@ class DragController {
         const defView = getProtoView(def, DefView);
         if (!this.defs.useGraphView) {
             removeNode(def);
+            // FIXME: don't do this
             this.worldHandle = this.defs.ctx.push(defView);
         }
         defView._isBeingDragged = true;
@@ -699,7 +720,7 @@ class DragController {
         ];
         t.commit();
         this.defs.putTentative(defView.position[1] + this.defs.offset[1], defView.size[1]);
-        new Transaction(1, 0.3).commitAfterLayout(this.defs.ctx);
+        //new Transaction(1, 0.3).commitAfterLayout(this.defs.ctx);
     }
     moveDefDrag (x, y) {
         this.moveDrag(x, y, DefView, slot => slot.acceptsDef);
@@ -752,7 +773,6 @@ class DragController {
                 ];
                 removeNode(expr);
                 this.defs.addFloatingExpr(expr);
-                this.defs.flushSubviews();
                 transaction.commit();
             }
 
