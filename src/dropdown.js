@@ -148,6 +148,16 @@ export class Dropdown extends View {
             ];
             this.bgLayer.stroke = this.highlightLayer.background;
 
+            // anchor view position is the absolute position
+            if (this.anchorView.position[1] + this.bgLayer.position[1] < 0) {
+                // clipping the top!
+                this.bgLayer.position[1] = -this.anchorView.position[1];
+            }
+            if (this.anchorView.position[1] + this.bgLayer.position[1] + this.bgLayer.size[1] > this.ctx.window.size[1]) {
+                // clipping the bottom!
+                this.bgLayer.position[1] = this.ctx.window.size[1] - this.bgLayer.size[1] - this.anchorView.position[1];
+            }
+
             this.layer.size = [
                 this.bgLayer.size[0],
                 itemHeight + config.primitives.paddingYS * 2,

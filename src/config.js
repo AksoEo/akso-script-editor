@@ -1,5 +1,34 @@
 const fontStack = '"Avenir Next", "Museo Sans", Roboto, "Helvetica Neue", Ubuntu, Cantarell, sans-serif';
 
+const dateUnits = {
+    days: 'days',
+    weeks: 'weeks',
+    months: 'months',
+    years: 'years',
+};
+const dateFields = {
+    d: 'day',
+    M: 'month',
+    y: 'year',
+};
+const timestampFields = {
+    s: 'second',
+    m: 'minute',
+    h: 'hour',
+    d: 'day',
+    M: 'month',
+    y: 'year',
+};
+const timestampUnits = {
+    s: 'seconds',
+    m: 'minutes',
+    h: 'hours',
+    d: 'days',
+    w: 'weeks',
+    M: 'months',
+    y: 'years',
+};
+
 export default {
     cornerRadius: 4,
 
@@ -26,6 +55,7 @@ export default {
         color: [0, 0, 0, 1],
         colorH: [1, 1, 1, 1],
         color0: [0, 0, 0, 0],
+        trueNameColor: [0, 0, 0, 0.5],
         iconColor: [0, 0, 0, 0.7],
         iconColor0: [0, 0, 0, 0],
 
@@ -207,12 +237,24 @@ export default {
             'med',
         ],
         date_time: [
+            'date_today',
+            'ts_now',
+            'date_get',
+            'date_set',
+            'ts_get',
+            'ts_set',
             'date_sub',
             'date_add',
-            'date_today',
+            'ts_add',
+            'ts_sub',
+            'ts_from_unix',
+            'ts_to_unix',
+            'ts_from_date',
+            'ts_to_date',
+            'ts_parse',
+            'ts_to_string',
             'date_fmt',
-            'time_now',
-            'datetime_fmt',
+            'ts_fmt',
         ],
         misc: [
             'currency_fmt',
@@ -264,8 +306,18 @@ export default {
         date_add: 'add to date',
         date_today: 'current date',
         date_fmt: 'format date',
-        time_now: 'current time',
-        datetime_fmt: 'format date time',
+        date_get: 'get date field',
+        date_set: 'set date field',
+        ts_now: 'current time',
+        tz_utc: 'UTC time zone',
+        tz_local: 'local time zone',
+        ts_from_unix: 'timestamp from unix time',
+        ts_to_unix: 'timestamp to unix time',
+        ts_from_date: 'timestamp from date',
+        ts_to_date: 'timestamp to date',
+        ts_parse: 'parse timestamp',
+        ts_to_string: 'timestamp to string',
+        ts_fmt: 'format timestamp',
         currency_fmt: 'format currency',
         country_fmt: 'format country',
         phone_fmt: 'format phone number',
@@ -314,34 +366,32 @@ export default {
         date_sub: ['result unit', 'minuend', 'subtrahend'],
         date_add: ['factor unit', 'augend', 'factor'],
         date_fmt: ['date'],
-        datetime_fmt: ['datetime'],
+        date_get: ['field', 'date'],
+        date_set: ['field', 'date', 'value'],
+        ts_from_unix: ['unix time'],
+        ts_to_unix: ['timestamp'],
+        ts_from_date: ['date', 'time zone', 'hours', 'minutes', 'seconds'],
+        ts_to_date: ['date', 'time zone'],
+        ts_parse: ['date string'],
+        ts_to_string: ['timestamp'],
+        ts_fmt: ['timestamp'],
+        ts_add: ['factor unit', 'augend', 'factor'],
+        ts_sub: ['result unit', 'minuend', 'subtrahend'],
+        ts_get: ['field', 'timestamp', 'time zone'],
+        ts_set: ['field', 'timestamp', 'time zone', 'value'],
         currency_fmt: ['currency', 'value'],
         country_fmt: ['code'],
         phone_fmt: ['phone number'],
     },
     stdlibSlots: {
-        date_sub: [
-            {
-                type: 'enum',
-                variants: {
-                    days: 'days',
-                    weeks: 'weeks',
-                    months: 'months',
-                    years: 'years',
-                },
-            },
-        ],
-        date_add: [
-            {
-                type: 'enum',
-                variants: {
-                    days: 'days',
-                    weeks: 'weeks',
-                    months: 'months',
-                    years: 'years',
-                },
-            },
-        ],
+        date_sub: [{ type: 'enum', variants: dateUnits }],
+        date_add: [{ type: 'enum', variants: dateUnits }],
+        date_get: [{ type: 'enum', variants: dateFields }],
+        date_set: [{ type: 'enum', variants: dateFields }],
+        ts_add: [{ type: 'enum', variants: timestampUnits }],
+        ts_sub: [{ type: 'enum', variants: timestampUnits }],
+        ts_get: [{ type: 'enum', variants: timestampFields }],
+        ts_set: [{ type: 'enum', variants: timestampFields }],
         currency_fmt: [
             {
                 type: 'enum',

@@ -394,6 +394,9 @@ class ExprFactory extends View {
         this.exprView._isDemo = true;
         this.exprView.decorationOnly = true;
         this.addSubview(this.exprView);
+
+        Gesture.onTap(this, this.onTap);
+        Gesture.onDrag(this, this.onDragMove, this.onDragStart, this.onDragEnd, this.onDragCancel);
     }
 
     wantsChildLayout = true;
@@ -414,10 +417,14 @@ class ExprFactory extends View {
     #dragStartPos = [0, 0];
     #createdDragRef = null;
 
-    onPointerStart ({ absX, absY }) {
+    onDragStart = ({ absX, absY }) => {
         this.#dragStartPos = [absX, absY];
-        this.#createdDragRef = false;
-    }
+        this.#createdDragRef = this.createInstance();
+        const t = new Transaction(1, 0.3);
+        this.lib.defs.dragController.beginExprDrag(this.#createdDragRef, absX, absY);
+        this.lib.defs.showTrash = false; // don't show trash on initial drag
+        t.commitAfterLayout(this.ctx);
+    };
 
     createInstance () {
         const expr = this.makeExpr(this.lib.defs.defs.ctx);
@@ -431,34 +438,27 @@ class ExprFactory extends View {
         return expr;
     }
 
-    onPointerDrag ({ absX, absY }) {
-        if (this.#createdDragRef) {
-            this.lib.defs.dragController.moveExprDrag(absX, absY);
-        } else {
-            const distance = Math.hypot(absX - this.#dragStartPos[0], absY - this.#dragStartPos[1]);
-            if (distance > 6) {
-                this.#createdDragRef = this.createInstance();
-                const t = new Transaction(1, 0.3);
-                this.lib.defs.dragController.beginExprDrag(this.#createdDragRef, absX, absY);
-                this.lib.defs.showTrash = false; // don't show trash on initial drag
-                t.commitAfterLayout(this.ctx);
-            }
-        }
-    }
+    onDragMove = ({ absX, absY }) => {
+        this.lib.defs.dragController.moveExprDrag(absX, absY);
+    };
 
-    onPointerEnd () {
-        if (this.#createdDragRef) {
-            const exprView = getProtoView(this.#createdDragRef, ExprView);
-            exprView.decorationOnly = false;
-            this.lib.defs.dragController.endExprDrag();
-        } else {
-            const expr = this.createInstance();
-            const exprView = getProtoView(expr, ExprView);
-            exprView.decorationOnly = false;
+    onTap = () => {
+        const expr = this.createInstance();
+        const exprView = getProtoView(expr, ExprView);
+        exprView.decorationOnly = false;
 
-            const t = new Transaction(0.8, 0.5);
-            exprView.position = [16, 16];
-            t.commit();
-        }
-    }
+        const t = new Transaction(0.8, 0.5);
+        exprView.position = [16, 16];
+        t.commit();
+    };
+
+    onDragEnd = () => {
+        const exprView = getProtoView(this.#createdDragRef, ExprView);
+        exprView.decorationOnly = false;
+        this.lib.defs.dragController.endExprDrag();
+    };
+    onDragCancel = () => {
+        // TODO: proper behavior
+        this.onDragEnd();
+    };
 }

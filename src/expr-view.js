@@ -3,6 +3,7 @@ import { getProtoView } from './proto-pool';
 import { evalExpr } from './model';
 import { Dropdown } from './dropdown';
 import { Tooltip } from './tooltip';
+import { signature } from '@tejo/akso-script';
 import config from './config';
 
 /// Renders a slot for an expression, or UI if this field has a spec.
@@ -90,6 +91,7 @@ export class ExprSlot extends View {
                         type: 's',
                         value: variants[0],
                     });
+                    this.needsLayout = true;
                 }
 
                 if (this.expr && this.expr.type === 's' && variants.includes(this.expr.value)) {
@@ -209,6 +211,7 @@ export class ExprView extends View {
         Gesture.onTap(this, () => {
             if (this.impl$tapAction) this.impl$tapAction();
         });
+        Gesture.onDrag(this, this.onDragMove, this.onDragStart, this.onDragEnd, this.onDragCancel);
     }
 
     updateImpl () {
@@ -237,34 +240,28 @@ export class ExprView extends View {
 
     #dragStartPos = [0, 0];
     #dragging = false;
-    onPointerStart ({ absX, absY }) {
+    onDragStart = ({ absX, absY }) => {
         if (this.noInteraction) return;
         this.#dragStartPos = [absX, absY];
-        this.#dragging = false;
         this.decorationOnly = true;
-    }
-    onPointerDrag ({ absX, absY }) {
+        this.dragController.beginExprDrag(this.expr, absX, absY);
+        if (this.impl$onDragStart) this.impl$onDragStart();
+        this.#dragging = true;
+    };
+    onDragMove = ({ absX, absY }) => {
         if (this.noInteraction) return;
-        if (this.#dragging) {
-            this.dragController.moveExprDrag(absX, absY);
-        } else {
-            const distance = Math.hypot(absX - this.#dragStartPos[0], absY - this.#dragStartPos[1]);
-            if (distance > 6) {
-                this.dragController.beginExprDrag(this.expr, absX, absY);
-                if (this.impl$onDragStart) this.impl$onDragStart();
-                this.#dragging = true;
-            }
-        }
-    }
-    onPointerEnd () {
+        this.dragController.moveExprDrag(absX, absY);
+    };
+    onDragEnd = () => {
         if (this.noInteraction) return;
-        if (this.#dragging) {
-            this.dragController.endExprDrag();
-        } else {
-            if (this.impl$tapAction) this.impl$tapAction();
-        }
+        this.dragController.endExprDrag();
         this.decorationOnly = false;
-    }
+    };
+    onDragCancel = () => {
+        if (this.noInteraction) return;
+        this.dragController.cancelExprDrag();
+        this.decorationOnly = false;
+    };
     onPointerEnter (event) {
         if (this.noInteraction) return;
         if (this.impl$onPointerEnter) this.impl$onPointerEnter(event);
@@ -301,10 +298,13 @@ const EXPR_VIEW_IMPLS = {
 
             this.iconLayer = new PathLayer();
             this.iconLayer.fill = config.primitives.iconColor;
+
+            this.peekView = new PeekView();
         },
         deinit () {
             delete this.textLayer;
             delete this.iconLayer;
+            delete this.peekView;
         },
         tapAction () {
             this.ctx.beginInput(
@@ -315,6 +315,7 @@ const EXPR_VIEW_IMPLS = {
             ).then(name => {
                 if (this.isDef) {
                     this.onDefRename(name);
+                    this.needsLayout = true;
                 } else {
                     this.expr.name = name;
                     this.expr.ctx.notifyMutation(this.expr);
@@ -324,6 +325,7 @@ const EXPR_VIEW_IMPLS = {
         },
         layout () {
             this.textLayer.text = this.expr.name;
+            this.layer.strokeWidth = config.primitives.outlineWeight;
             if (!this._isDemo && !this.isDef && !this.expr.name.startsWith('@') && !this.expr.refNode) {
                 this.iconLayer.path = config.icons.refBroken;
                 this.layer.background = config.primitives.refBroken;
@@ -346,6 +348,28 @@ const EXPR_VIEW_IMPLS = {
                 this.layer.size = [textSize[0] + iconSize + 4 + config.primitives.paddingX * 2, textSize[1] + config.primitives.paddingYS * 2];
                 this.textLayer.position = [4 + iconSize + 4, this.layer.size[1] / 2];
             }
+
+            this.peekView.size = this.layer.size;
+        },
+        onPointerEnter () {
+            const result = evalExpr(this.expr);
+            if (!result) return;
+
+            const t = new Transaction(1, 0.2);
+            this.layer.strokeWidth = config.primitives.hoverOutlineWeight;
+            this.layer.stroke = config.primitives.callHoverOutline;
+            t.commit();
+
+            this.peekView.value = result.result;
+            this.peekView.analysis = result.analysis;
+            this.peekView.visible = true;
+        },
+        onPointerExit () {
+            this.peekView.visible = false;
+            this.layout();
+        },
+        *iterSubviews () {
+            yield this.peekView;
         },
         *iterSublayers () {
             yield this.textLayer;
@@ -586,7 +610,10 @@ const EXPR_VIEW_IMPLS = {
                 this.slots.push(new ExprSlot(expr => {
                     this.expr.items[index] = expr;
                     expr.parent = this.expr;
-                    expr.ctx.notifyMutation(this.expr);
+                    this.ctx.startMutation();
+                    this.ctx.notifyMutation(this);
+                    this.ctx.notifyMutation(this.expr);
+                    this.ctx.flushMutation();
                 }, this.expr.ctx));
             }
 
@@ -641,6 +668,9 @@ const EXPR_VIEW_IMPLS = {
             this.nameLayer = new TextLayer();
             this.nameLayer.font = config.identFont;
             this.nameLayer.color = config.primitives.color;
+            this.trueNameLayer = new TextLayer();
+            this.trueNameLayer.font = config.callArgFont;
+            this.trueNameLayer.color = config.primitives.trueNameColor;
             this.argSlots = [];
             this.argLabels = [];
 
@@ -655,13 +685,19 @@ const EXPR_VIEW_IMPLS = {
         layout () {
             const refNode = this.expr.func.refNode;
             let funcName = this.expr.func.name;
+            let trueName = null;
 
             if (refNode && refNode.type === 'ds' && refNode.nameOverride) {
+                if (refNode.nameOverride !== funcName) trueName = funcName;
                 funcName = refNode.nameOverride;
             }
 
             this.nameLayer.text = funcName;
-            const nameSize = this.nameLayer.getNaturalSize();
+            this.trueNameLayer.text = trueName ? trueName : '';
+            const displayNameSize = this.nameLayer.getNaturalSize();
+            const trueNameSize = this.trueNameLayer.getNaturalSize();
+            const nameSize = displayNameSize.slice();
+            if (nameSize[0] < trueNameSize[0]) nameSize[0] = trueNameSize[0];
 
             let infix = false;
             let params, slots;
@@ -703,7 +739,7 @@ const EXPR_VIEW_IMPLS = {
                 this.argLabels.push(label);
             }
 
-            let height = nameSize[1];
+            let height = nameSize[1] + trueNameSize[1];
 
             for (let i = 0; i < this.argSlots.length; i++) {
                 const arg = this.expr.args[i] || null;
@@ -727,6 +763,7 @@ const EXPR_VIEW_IMPLS = {
             if (!infix) {
                 width += config.primitives.paddingX;
                 this.nameLayer.position = [width, height / 2];
+                this.trueNameLayer.position = [width + (nameSize[0] - trueNameSize[0]) / 2, height / 2 + nameSize[1] - 2];
                 width += nameSize[0];
             }
 
@@ -749,7 +786,8 @@ const EXPR_VIEW_IMPLS = {
 
                 if (infix && i === 0) {
                     width += config.primitives.paddingX;
-                    this.nameLayer.position = [width, height / 2];
+                    this.nameLayer.position = [width + (nameSize[0] - displayNameSize[0]) / 2, height / 2];
+                    this.trueNameLayer.position = [width + (nameSize[0] - trueNameSize[0]) / 2, height / 2 + nameSize[1] - 2];
                     width += nameSize[0];
                 }
             }
@@ -761,15 +799,12 @@ const EXPR_VIEW_IMPLS = {
 
             this.layer.size = [width, height];
 
-            /*this.peekView.position = [
-                width / 2,
-                -4,
-            ];*/
             this.peekView.position = [0, 0];
             this.peekView.size = this.size;
         },
         *iterSublayers () {
             yield this.nameLayer;
+            yield this.trueNameLayer;
             if (!this.isInfix) {
                 for (const label of this.argLabels) yield label;
             }

@@ -209,7 +209,7 @@ export class DragGestureHandler extends GestureHandler {
     onDragDelay = () => {
         this.priority = Gesture.Priority.DELAYED_DRAG;
         this.isDragging = true;
-        this.emit('start');
+        this.emit('start', this.lastPos);
         this.startPos = this.lastPos;
     };
     onPointerDrag ({ x, y, absX, absY }) {
@@ -220,8 +220,8 @@ export class DragGestureHandler extends GestureHandler {
                 clearTimeout(this.dragDelayTimeout);
                 this.priority = Gesture.Priority.DRAG;
                 this.isDragging = true;
-                this.emit('start');
                 this.startPos = { x, y, absX, absY };
+                this.emit('start', this.startPos);
             }
         } else {
             this.emit('move', {
@@ -239,10 +239,12 @@ export class DragGestureHandler extends GestureHandler {
     }
     onPointerEnd () {
         clearTimeout(this.dragDelayTimeout);
+        if (!this.isDragging) return;
         this.emit('end');
     }
     onPointerCancel () {
         clearTimeout(this.dragDelayTimeout);
+        if (!this.isDragging) return;
         this.emit('cancel');
     }
 }

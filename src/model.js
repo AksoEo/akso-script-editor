@@ -340,35 +340,50 @@ function toRawExpr (expr, makeAux) {
 }
 
 /// Removes a node from its parent.
+///
+/// Returns an object that can undo the removal, assuming nothing else was mutated.
 export function remove (node) {
     const parent = node.parent;
     if (!parent) return;
 
+    let innerUndo;
+
     if (parent.type === 'd') {
         if (!parent.defs.has(node)) throw new Error('internal inconsistency: expected parent defs to contain self');
         parent.defs.delete(node);
+        innerUndo = () => parent.defs.add(node);
     } else if (parent.type === 'ds') {
         if (parent.expr !== node) throw new Error('internal inconsistency: expected expr in parent def to be self');
         parent.expr = null;
+        innerUndo = () => parent.expr = node;
     } else if (parent.type === 'l') {
         const index = parent.items.indexOf(node);
         if (index === -1) throw new Error('internal inconsistency: expected parent list to contain self');
         parent.items.splice(index, 1);
+        innerUndo = () => parent.items.splice(index, 0, node);
     } else if (parent.type === 'c') {
         if (parent.func === node) {
             parent.func = null;
+            innerUndo = () => parent.func = node;
         } else {
             const index = parent.args.indexOf(node);
             if (index === -1) throw new Error('internal inconsistency: expected parent call to contain self');
             parent.args[index] = null;
+            innerUndo = () => parent.args[index] = node;
         }
     } else if (parent.type === 'f') {
         if (parent.expr !== node) throw new Error('internal inconsistency: expected body in parent func to be self');
         parent.body = null;
+        innerUndo = () => parent.body = node;
     } else if (parent.type === 'w') {
         for (const m of parent.matches) {
-            if (m.cond === node) m.cond = null;
-            if (m.value === node) m.value = null;
+            if (m.cond === node) {
+                m.cond = null;
+                innerUndo = () => m.cond = node;
+            } else if (m.value === node) {
+                m.value = null;
+                innerUndo = () => m.value = node;
+            }
         }
     }
 
@@ -377,6 +392,17 @@ export function remove (node) {
     node.ctx.notifyMutation(parent);
     node.ctx.notifyMutation(node);
     node.ctx.flushMutation();
+
+    return {
+        undo: () => {
+            innerUndo();
+            node.parent = parent;
+            node.ctx.startMutation();
+            node.ctx.notifyMutation(parent);
+            node.ctx.notifyMutation(node);
+            node.ctx.flushMutation();
+        },
+    };
 }
 
 export function makeStdRefs () {
@@ -526,6 +552,7 @@ export function evalExpr (expr) {
     try {
         analysis = analyze(rawDefs, out, {});
     } catch (err) {
+        console.debug(err);
         return null;
     }
 
