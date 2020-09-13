@@ -185,6 +185,12 @@ export default {
             noColor: [0, 0, 0, 0],
             activeBackground: [0.5, 0.5, 0.5, 1],
         },
+        remove: {
+            color: [1, 1, 1, 1],
+            background: [0.9, 0, 0.34, 1],
+            activeBackground: [0.7, 0, 0.14, 1],
+        },
+        color: [0, 0, 0, 1],
         background: [0.8, 0.8, 0.8, 1],
         insetY: 4,
         insetX: 8,

@@ -1,4 +1,4 @@
-import { View, Gesture, Transaction, TextLayer } from './ui';
+import { View, Gesture, Transaction, Layer, TextLayer } from './ui';
 import { ExprView } from './expr-view';
 import { createContext } from './model';
 import { getProtoView } from './proto-pool';
@@ -27,8 +27,6 @@ export function initFormVarsTab (lib, tab) {
     tab.itemList.items.push(addFormVar);
     tab.itemList.items.push(new BottomPaddingView());
 }
-
-// TODO: removing form vars, nicer layout
 
 class FormVarItem extends View {
     constructor (lib) {
@@ -68,15 +66,22 @@ class FormVarItem extends View {
 
         this.exprView = new ExprView(this.var);
         this.addSubview(this.exprView);
-    }
-    didAttach (ctx) {
-        super.didAttach(ctx);
-        this.ctx.modelCtx.formVars.push(this.var);
-    }
-    willDetach () {
-        super.willDetach();
-        const idx = this.ctx.modelCtx.formVars.indexOf(this.var);
-        if (idx !== -1) this.ctx.modelCtx.formVars.splice(idx, 1);
+
+        this.remove = new RemoveFormVar(this.onRemove);
+        this.addSubview(this.remove);
+
+        this.equalsLayer = new TextLayer();
+        this.equalsLayer.text = '=';
+        this.equalsLayer.color = config.formVars.color;
+        this.equalsLayer.font = config.identFont;
+        this.addSublayer(this.equalsLayer);
+
+        // initial layout with opacity 0 to fade in contents when created
+        this.layout();
+        this.name.layer.opacity = 0;
+        this.typeSelection.layer.opacity = 0;
+        this.exprView.layer.opacity = 0;
+        this.remove.layer.opacity = 0;
     }
 
     // fake dragcontroller interface for the left hand side
@@ -117,6 +122,11 @@ class FormVarItem extends View {
         }
     }
 
+    didAttach (ctx) {
+        super.didAttach(ctx);
+        this.ctx.modelCtx.formVars.push(this.var);
+    }
+
     onRename = name => {
         name = name.replace(/^@+/, ''); // strip leading @ signs
         // TODO: find duplicates
@@ -131,6 +141,20 @@ class FormVarItem extends View {
         this.onTypeChange(this.typeSelection.expr.value);
         this.ctx.modelCtx.notifyFormVarsMutation();
         this.exprView.needsLayout = true;
+    };
+
+    willDetach () {
+        super.willDetach();
+        const idx = this.ctx.modelCtx.formVars.indexOf(this.var);
+        if (idx !== -1) this.ctx.modelCtx.formVars.splice(idx, 1);
+    }
+    onRemove = () => {
+        const t = new Transaction(1, 0.3);
+        const parent = this.parent;
+        // so far, parent is guaranteed to be an ItemList
+        parent.items.splice(parent.items.indexOf(this), 1);
+        parent.needsLayout = true;
+        t.commitAfterLayout(parent.ctx);
     };
 
     onTypeChange (type) {
@@ -150,20 +174,102 @@ class FormVarItem extends View {
     };
 
     layout () {
+        // reset constructor stuff
+        this.name.layer.opacity = 1;
+        this.typeSelection.layer.opacity = 1;
+        this.exprView.layer.opacity = 1;
+        this.remove.layer.opacity = 1;
+
         this.name.expr.name = '@' + this.var.name;
+
+        this.remove.layoutIfNeeded();
         this.name.layoutIfNeeded();
         this.typeSelection.layoutIfNeeded();
         this.exprView.layoutIfNeeded();
 
-        let y = 8;
-        this.name.position = [8, y];
-        y += this.name.size[1] + 8;
-        this.typeSelection.position = [8, y];
-        y += this.typeSelection.size[1] + 8;
-        this.exprView.position = [8, y];
-        y += this.exprView.size[1] + 8;
+        // (-) name =
+        // [type v] [value]
 
-        this.layer.size = [this.parentWidth || 0, y];
+        const line1CenterY = 8 + this.name.size[1] / 2;
+        this.remove.position = [8, line1CenterY - this.remove.size[1] / 2];
+        this.name.position = [
+            8 + this.remove.size[0] + 8,
+            line1CenterY - this.name.size[1] / 2,
+        ];
+        this.equalsLayer.position = [
+            8 + this.remove.size[0] + 8 + this.name.size[0] + 8,
+            line1CenterY,
+        ];
+        const line1BottomY = Math.max(
+            this.remove.position[1] + this.remove.size[1],
+            this.name.position[1] + this.name.size[1],
+        );
+
+        const line2Top = line1BottomY + 8;
+        this.typeSelection.position = [8, line2Top];
+        this.exprView.position = [
+            8 + this.typeSelection.size[0] + 8,
+            line2Top,
+        ];
+        const line2Bottom = line2Top + Math.max(this.typeSelection.size[1], this.exprView.size[1]);
+
+        this.layer.size = [this.parentWidth || 0, line2Bottom + 8];
+    }
+}
+
+class RemoveFormVar extends View {
+    constructor (onRemove) {
+        super();
+        this.bgLayer = new Layer();
+        this.addSublayer(this.bgLayer);
+        this.minusLayer = new Layer();
+        this.minusLayer.background = config.formVars.remove.color;
+        this.addSublayer(this.minusLayer);
+        this.needsLayout = true;
+
+        Gesture.onTap(this, onRemove, this.onTapStart, this.onTapEnd);
+    }
+
+    layout () {
+        const size = 22;
+        this.layer.size = [size, size];
+
+        const bgSize = this.hovering ? 24 : 20;
+
+        this.bgLayer.background = this.active
+            ? config.formVars.remove.activeBackground
+            : config.formVars.remove.background;
+        this.bgLayer.size = [bgSize, bgSize];
+        this.bgLayer.position = [(size - bgSize) / 2, (size - bgSize) / 2];
+        this.bgLayer.cornerRadius = bgSize / 2;
+
+        this.minusLayer.size = [size * 0.6, 2];
+        this.minusLayer.position = [(size - this.minusLayer.size[0]) / 2, (size - 1) / 2];
+    }
+
+    onPointerEnter () {
+        const t = new Transaction(1, 0.1);
+        this.hovering = true;
+        this.layout();
+        t.commit();
+    };
+    onPointerExit () {
+        const t = new Transaction(1, 0.4);
+        this.hovering = false;
+        this.layout();
+        t.commit();
+    }
+    onTapStart = () => {
+        const t = new Transaction(1, 0.1);
+        this.active = true;
+        this.layout();
+        t.commit();
+    };
+    onTapEnd = () => {
+        const t = new Transaction(1, 0.4);
+        this.active = false;
+        this.layout();
+        t.commit();
     }
 }
 
