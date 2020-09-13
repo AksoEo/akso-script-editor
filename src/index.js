@@ -1,10 +1,7 @@
-// TEMP for testing UI
-
 import { Window, ViewRoot } from './ui';
 import { EditorView } from './editor-view';
 import { CodeEditor } from './code-editor';
 import { TextInput } from './text-input';
-import { ExtrasRoot } from './extras';
 import { lex } from './asct/lex';
 import { parse } from './asct/parse';
 import { write } from './asct/write';
@@ -17,7 +14,6 @@ export default class Editor {
     editor = new EditorView();
     textInput = new TextInput();
     codeEditor = new CodeEditor();
-    extras = new ExtrasRoot();
 
     constructor () {
         const win = new Window();
@@ -33,9 +29,6 @@ export default class Editor {
             get: () => this.codeEditor.get(),
             enumerable: true,
         });
-
-        this.root.node.appendChild(this.extras.node);
-        this.root.ctx.extras = this.extras;
     }
 
     get node () {

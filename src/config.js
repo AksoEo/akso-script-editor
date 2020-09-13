@@ -156,6 +156,9 @@ export default {
             stdlib: {
                 title: 'Standard Library',
             },
+            formVars: {
+                title: 'Form Variables',
+            },
         },
         background: [0.95, 0.95, 0.95, 1],
         sideTabs: {
@@ -170,11 +173,21 @@ export default {
         description: 'Enter form variable values here for testing',
         defaultName: n => `form-var-${n}`,
         types: {
-            null: 'null',
-            bool: 'bool',
-            number: 'number',
-            string: 'string',
+            u: 'null',
+            b: 'bool',
+            n: 'number',
+            s: 'string',
+            m: 'matrix',
         },
+        add: {
+            label: 'Add form variable',
+            color: [0, 0, 0, 1],
+            noColor: [0, 0, 0, 0],
+            activeBackground: [0.5, 0.5, 0.5, 1],
+        },
+        background: [0.8, 0.8, 0.8, 1],
+        insetY: 4,
+        insetX: 8,
     },
 
     icons: {

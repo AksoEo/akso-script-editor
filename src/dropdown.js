@@ -4,7 +4,7 @@ import config from './config';
 /// A dropdown.
 ///
 /// # Properties
-/// - expr: { value: string }
+/// - expr: { value: string, ctx }
 /// - spec: { variants: { [value]: label } }
 export class Dropdown extends View {
     constructor (expr, spec) {

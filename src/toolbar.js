@@ -13,7 +13,6 @@ export class Toolbar extends View {
             new Button('Help', () => {}),
             new Button('Graph', this.toggleGraphView),
             new Button('Code', this.toggleCodeView),
-            new Button('Form Vars', this.toggleFormVars),
         ];
     }
 
@@ -35,15 +34,6 @@ export class Toolbar extends View {
         } else {
             this.canvas.enterCodeMode();
         }
-    };
-
-    toggleFormVars = () => {
-        if (!this.ctx.extras.isVarsOpen()) {
-            const t = new Transaction(1, 0.3);
-            this.canvas.library.close();
-            t.commitAfterLayout(this.ctx);
-        }
-        this.ctx.extras.toggleVars();
     };
 
     layout () {

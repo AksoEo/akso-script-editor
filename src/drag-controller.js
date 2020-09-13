@@ -197,7 +197,7 @@ export class DragController {
             if (this.#currentSlot instanceof Trash) newScale = 0.5;
         }
 
-        const transaction = new Transaction(1, 0.3);
+        const transaction = new Transaction(1, 0.2);
         exprView.position = newPos;
         exprView.layer.scale = newScale;
         transaction.commitAfterLayout(this.defs.ctx);

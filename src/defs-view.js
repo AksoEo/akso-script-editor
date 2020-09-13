@@ -430,6 +430,7 @@ export class DefView extends View {
     };
 
     // fake dragcontroller interface for the left hand side
+    // FIXME: can the drag detection stuff be removed?
     #dragStartPos = [0, 0];
     #createdDragRef = false;
     beginExprDrag (expr, x, y) {
