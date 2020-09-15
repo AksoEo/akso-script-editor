@@ -1,9 +1,9 @@
-import { View, PortalView, Layer, TextLayer, ArrowLayer, PathLayer, Transaction, Gesture } from './ui';
+import { View, TextLayer, PathLayer, Transaction, Gesture } from './ui';
 import { getProtoView } from './proto-pool';
 import { evalExpr } from './model';
 import { Dropdown } from './dropdown';
 import { Tooltip } from './tooltip';
-import { signature } from '@tejo/akso-script';
+import { ValueView } from './value-view';
 import config from './config';
 
 /// Renders a slot for an expression, or UI if this field has a spec.
@@ -157,9 +157,9 @@ class PeekView extends View {
         this.tooltip = new Tooltip();
         this.addSubview(this.tooltip);
 
-        this.innerExpr = new ExprView({ type: 'u' });
-        this.innerExpr.noInteraction = true;
-        this.tooltip.contents = this.innerExpr;
+        this.inner = new ValueView();
+        this.inner.noInteraction = true;
+        this.tooltip.contents = this.inner;
     }
 
     get decorationOnly () {
@@ -183,18 +183,9 @@ class PeekView extends View {
     }
 
     layout () {
-        const { value, innerExpr: ie } = this;
-        if (value === null) ie.expr = { type: 'u' };
-        else if (typeof value === 'boolean') ie.expr = { type: 'b', value };
-        else if (typeof value === 'number') ie.expr = { type: 'n', value };
-        else if (typeof value === 'string') ie.expr = { type: 's', value };
-        else if (Array.isArray(value)) ie.expr = { type: 'm', value };
-        else if (typeof value === 'function') ie.expr = { type: 's', value: '(todo: func expr)' };
-        else ie.expr = { type: 's', value: `don’t know the type ${typeof value}` };
-
+        this.inner.value = this.value;
+        this.inner.layoutIfNeeded();
         this.tooltip.size = this.size;
-
-        this.innerExpr.layout();
         this.tooltip.layoutIfNeeded();
     }
 }
@@ -241,7 +232,7 @@ export class ExprView extends View {
     #dragStartPos = [0, 0];
     #dragging = false;
     onDragStart = ({ absX, absY }) => {
-        if (this.noInteraction) return;
+        if (this.noInteraction || !this.dragController) return;
         this.#dragStartPos = [absX, absY];
         this.decorationOnly = true;
         this.dragController.beginExprDrag(this.expr, absX, absY);
@@ -249,16 +240,16 @@ export class ExprView extends View {
         this.#dragging = true;
     };
     onDragMove = ({ absX, absY }) => {
-        if (this.noInteraction) return;
+        if (this.noInteraction || !this.dragController) return;
         this.dragController.moveExprDrag(absX, absY);
     };
     onDragEnd = () => {
-        if (this.noInteraction) return;
+        if (this.noInteraction || !this.dragController) return;
         this.dragController.endExprDrag();
         this.decorationOnly = false;
     };
     onDragCancel = () => {
-        if (this.noInteraction) return;
+        if (this.noInteraction || !this.dragController) return;
         this.dragController.cancelExprDrag();
         this.decorationOnly = false;
     };
@@ -851,7 +842,7 @@ const EXPR_VIEW_IMPLS = {
             delete this.textLayer;
         },
         layout () {
-            this.textLayer.text = config.primitives.functionLabel;
+            this.textLayer.text = config.primitives.functionLabel + '(' + this.expr.params.join(', ') + ')';
 
             const textSize = this.textLayer.getNaturalSize();
             this.layer.size = [textSize[0] + 16, textSize[1] + 4];

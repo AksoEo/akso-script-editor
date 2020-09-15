@@ -32,6 +32,7 @@ const timestampUnits = {
 export default {
     cornerRadius: 4,
 
+    sectionFont: '500 18px ' + fontStack,
     identFont: '500 14px ' + fontStack,
     labelFont: '500 13px ' + fontStack,
     callArgFont: '500 12px ' + fontStack,
@@ -169,8 +170,6 @@ export default {
     },
 
     formVars: {
-        title: 'Form Variables',
-        description: 'Enter form variable values here for testing',
         defaultName: n => `form-var-${n}`,
         types: {
             u: 'null',
@@ -180,7 +179,7 @@ export default {
             m: 'matrix',
         },
         add: {
-            label: 'Add form variable',
+            label: 'Add test variable',
             color: [0, 0, 0, 1],
             noColor: [0, 0, 0, 0],
             activeBackground: [0.5, 0.5, 0.5, 1],
@@ -281,6 +280,13 @@ export default {
             'phone_fmt',
         ],
     },
+    stdlibCategoryNames: {
+        math: 'Math',
+        logic: 'Logic',
+        functor_stuff: 'Lists',
+        date_time: 'Date & Time',
+        misc: 'Misc.',
+    },
     stdlibNames: {
         '+': '+',
         '-': '−',
@@ -333,6 +339,10 @@ export default {
         ts_from_unix: 'timestamp from unix time',
         ts_to_unix: 'timestamp to unix time',
         ts_from_date: 'timestamp from date',
+        ts_get: 'get timestamp field',
+        ts_set: 'set timestamp field',
+        ts_add: 'add to timestamp',
+        ts_sub: 'subtract timestamps',
         ts_to_date: 'timestamp to date',
         ts_parse: 'parse timestamp',
         ts_to_string: 'timestamp to string',
@@ -366,10 +376,10 @@ export default {
         xor: ['value', 'value'],
         id: ['value'],
         '++': ['functor', 'functor'],
-        map: ['morphism', 'functor'],
-        flat_map: ['morphism', 'functor'],
-        fold: ['morphism', 'initial', 'functor'],
-        fold1: ['morphism', 'functor'],
+        map: ['mapping', 'functor'],
+        flat_map: ['mapping', 'functor'],
+        fold: ['mapping', 'initial', 'functor'],
+        fold1: ['mapping', 'functor'],
         filter: ['filter', 'functor'],
         index: ['functor', 'index'],
         length: ['functor'],
@@ -383,7 +393,7 @@ export default {
         avg: ['functor'],
         med: ['functor'],
         date_sub: ['result unit', 'minuend', 'subtrahend'],
-        date_add: ['factor unit', 'augend', 'factor'],
+        date_add: ['amount unit', 'date', 'amount'],
         date_fmt: ['date'],
         date_get: ['field', 'date'],
         date_set: ['field', 'date', 'value'],
@@ -394,7 +404,7 @@ export default {
         ts_parse: ['date string'],
         ts_to_string: ['timestamp'],
         ts_fmt: ['timestamp'],
-        ts_add: ['factor unit', 'augend', 'factor'],
+        ts_add: ['amount unit', 'timestamp', 'amount'],
         ts_sub: ['result unit', 'minuend', 'subtrahend'],
         ts_get: ['field', 'timestamp', 'time zone'],
         ts_set: ['field', 'timestamp', 'time zone', 'value'],

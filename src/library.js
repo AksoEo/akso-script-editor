@@ -1,9 +1,7 @@
 import { VMFun } from '@tejo/akso-script';
 import { View, Layer, TextLayer, Transaction, Gesture } from './ui';
-import { ExprView } from './expr-view';
 import { ExprFactory } from './expr-factory';
-import { getProtoView } from './proto-pool';
-import { makeStdRefs, createContext, evalExpr } from './model';
+import { makeStdRefs, evalExpr } from './model';
 import { Scrollbar } from './scrollbar';
 import { initFormVarsTab } from './form-vars';
 import config from './config';
@@ -83,6 +81,7 @@ export class Library extends View {
                 new ExprFactory(this, ctx => ({ ctx, type: 's', value: '' })),
                 new ExprFactory(this, ctx => ({ ctx, type: 'm', value: [] })),
                 new ExprFactory(this, ctx => ({ ctx, type: 'r', name: '' })),
+                new ExprFactory(this, ctx => ({ ctx, type: 'l', items: [] })),
                 new ExprFactory(this, ctx => ({ ctx, type: 'f', params: [], body: {
                     ctx,
                     type: 'd',
@@ -97,6 +96,7 @@ export class Library extends View {
             tab.itemList.items = [];
             for (const categoryName in config.stdlibCategories) {
                 const category = config.stdlibCategories[categoryName];
+                tab.itemList.items.push(new SectionHeader(config.stdlibCategoryNames[categoryName]));
                 for (const id of category) {
                     tab.itemList.items.push(new ExprFactory(this, ctx => ({
                         ctx,
@@ -292,6 +292,24 @@ class SideTabs extends View {
             yield layer.bg;
             yield layer.labelContainer;
         }
+    }
+}
+
+class SectionHeader extends View {
+    constructor (label) {
+        super();
+
+        this.labelLayer = new TextLayer();
+        this.labelLayer.text = label;
+        this.labelLayer.font = config.sectionFont;
+        this.addSublayer(this.labelLayer);
+        this.needsLayout = true;
+    }
+    layout () {
+        const paddingTop = 8;
+        const labelSize = this.labelLayer.getNaturalSize();
+        this.labelLayer.position = [0, paddingTop + labelSize[1] / 2];
+        this.layer.size = [labelSize[0], labelSize[1] + paddingTop];
     }
 }
 

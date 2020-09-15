@@ -40,7 +40,7 @@ export class CodeEditor {
 
         try {
             const lexed = lex(editor.getValue());
-            const parsed = parse(lexed, createContext());
+            parse(lexed, createContext());
         } catch (err) {
             const span = err.getSpan ? err.getSpan() : null;
             const spanStart = span ? pos2lc(span[0]) : ({ line: 0, ch: 0 });

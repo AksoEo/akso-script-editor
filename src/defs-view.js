@@ -4,7 +4,8 @@ import { viewPool, getProtoView } from './proto-pool';
 import { Scrollbar } from './scrollbar';
 import config from './config';
 import { ExprSlot, ExprView } from './expr-view';
-import { remove as removeNode } from './model';
+import { ValueView } from './value-view';
+import { evalExpr, remove as removeNode } from './model';
 import { DragController } from './drag-controller';
 
 /// Renders a set of definitions.
@@ -29,7 +30,17 @@ export class DefsView extends View {
 
         this.addDefView = new AddDefView(this.addDef);
 
+        this.needsValueUpdate = true;
+
         Gesture.onScroll(this, this.onScroll);
+    }
+
+    updateValues () {
+        this.needsValueUpdate = false;
+        for (const def of this.defs.defs) {
+            const defView = getProtoView(def, DefView);
+            defView.updateValue();
+        }
     }
 
     /// List of arrows by source
@@ -91,6 +102,8 @@ export class DefsView extends View {
 
     layout () {
         super.layout();
+
+        if (this.needsValueUpdate) this.updateValues();
 
         let t;
         if (this.leftTrash !== this._wasLeftTrash) t = new Transaction(1, 0);
@@ -400,9 +413,38 @@ export class DefView extends View {
             this.def.ctx.notifyMutation(expr);
             this.def.ctx.notifyMutation(this.def);
         }, this.def.ctx);
+
+        this.valueView = new DefValueView();
+
+        this.addSublayer(this.eqLayer);
+        this.addSubview(this.refView);
+        this.addSubview(this.exprSlot);
+        this.addSubview(this.valueView);
+
         this.needsLayout = true;
 
         Gesture.onDrag(this, this.onDragMove, this.onDragStart, this.onDragEnd, this.onDragCancel);
+    }
+
+    cachedValue = undefined;
+    updateValue () {
+        // do we want a preview value?
+        let wantPreview = false;
+        if (this.def.expr) {
+            const previewTypes = ['c', 'r', 'l', 'w'];
+            if (previewTypes.includes(this.def.expr.type)) wantPreview = true;
+        }
+        if (!wantPreview) {
+            this.cachedValue = undefined;
+            return;
+        }
+        const result = evalExpr(this.def.expr);
+        if (!result) {
+            this.cachedValue = undefined;
+            return;
+        }
+
+        this.cachedValue = result.result;
     }
 
     #usingGraphView = false;
@@ -529,10 +571,6 @@ export class DefView extends View {
         new Transaction(1, 0.3).commitAfterLayout(this.ctx);
     };
 
-    set needsLayout (v) {
-        super.needsLayout = v;
-    }
-
     layout () {
         super.layout();
         this.refView.expr.name = this.def.name;
@@ -549,6 +587,9 @@ export class DefView extends View {
         this.exprSlot.exprCtx = this.def.ctx;
         this.exprSlot.dragController = this.dragController;
         this.exprSlot.layoutIfNeeded();
+
+        this.valueView.value = this.cachedValue;
+        this.valueView.layoutIfNeeded();
 
         const { padding } = config.def;
 
@@ -567,19 +608,62 @@ export class DefView extends View {
         width += this.exprSlot.size[0];
         width += padding;
 
+        if (this.valueView.size[0]) width += padding;
+        this.valueView.position = [width, (height - this.valueView.size[1]) / 2];
+        width += this.valueView.size[0];
+        if (this.valueView.size[0]) width += padding;
+
         this.layer.size = [
             this.usingGraphView ? width : Math.max(width, this.parentWidth),
             height,
         ];
     }
+}
 
-    *iterSublayers () {
-        yield this.eqLayer;
+class DefValueView extends View {
+    constructor () {
+        super();
+        this.layer.cornerRadius = config.cornerRadius + 6;
+        this.layer.background = config.peek.background;
+        this.arrowLayer = new ArrowLayer();
+        this.arrowLayer.stroke = config.peek.background;
+        this.arrowLayer.arrowSize = 8;
+        this.arrowLayer.strokeWidth = 4;
+        this.addSublayer(this.arrowLayer);
+
+        this.inner = new ValueView();
+        this.addSubview(this.inner);
+        this.needsLayout = true;
     }
+    wantsChildLayout = true;
+    get value () {
+        return this.inner.value;
+    }
+    set value (v) {
+        this.inner.value = v;
+    }
+    layout () {
+        super.layout();
+        this.inner.layoutIfNeeded();
 
-    *iterSubviews () {
-        yield this.refView;
-        yield this.exprSlot;
+        let ownSize;
+        if (this.inner.size[0]) {
+            // non-zero size means it has a value
+            ownSize = [
+                this.inner.size[0] + 12,
+                this.inner.size[1] + 12,
+            ];
+        } else {
+            ownSize = [0, 0];
+        }
+
+        this.inner.position = [6, 6];
+
+        this.layer.size = ownSize;
+        this.arrowLayer.start = [0, ownSize[1] / 2];
+        this.arrowLayer.control1 = this.arrowLayer.start;
+        this.arrowLayer.end = [ownSize[0] ? -10 : 0, ownSize[1] / 2];
+        this.arrowLayer.control2 = this.arrowLayer.end;
     }
 }
 

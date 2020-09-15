@@ -25,6 +25,7 @@ export class CanvasView extends View {
         this.modelCtx.onMutation(this.#onMutation);
         this.modelCtx.onStartMutation(this.#onStartMutation);
         this.modelCtx.onFlushMutation(this.#onFlushMutation);
+        this.modelCtx.onFormVarsMutation(this.#onFormVarsMutation);
         this.root = fromRawDefs({}, this.modelCtx);
         this.defsView = new DefsView(this.root);
         this.library = new Library(this.defsView);
@@ -42,8 +43,13 @@ export class CanvasView extends View {
             view.needsLayout = true;
             if (this.#mutations) this.#mutations.add(view);
         }
+        this.defsView.needsValueUpdate = true;
         this.defsView.needsLayout = true;
         this.resolveRefs();
+    };
+    #onFormVarsMutation = () => {
+        this.defsView.needsValueUpdate = true;
+        this.defsView.needsLayout = true;
     };
     #onFlushMutation = () => {
         this.defsView.layoutIfNeeded();

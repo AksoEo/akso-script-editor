@@ -37,7 +37,7 @@ editor.load({
     },
     list: {
         t: 'l',
-        v: ['thing', '_broken_ref', '@form-var'],
+        v: ['thing', '@form-var'],
     },
     expr_call: {
         t: 'c',
