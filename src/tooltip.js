@@ -123,23 +123,25 @@ export class Tooltip extends View {
         this.innerView.layer.opacity = this.#visible ? 1 : 0;
 
         const offsetY = this.#visible ? 12 + 2 * Math.sin(time * 4) : 0;
+        const maxOffsetY = this.#visible ? 14 : 0;
 
         let contentsSize = [0, 0];
         if (this.contents) contentsSize = this.contents.size.slice();
 
         // center position
         const popoutPos = [0, -offsetY - contentsSize[1] / 2];
+        const maxPopoutPos = [0, -maxOffsetY - contentsSize[1] / 2];
 
-        if (anchor[0] + popoutPos[0] - this.bgLayer.size[0] / 2 < 16) {
+        if (anchor[0] + maxPopoutPos[0] - this.bgLayer.size[0] / 2 < 16) {
             // too close to the left edge
             popoutPos[0] = 16 + this.bgLayer.size[0] / 2 - anchor[0];
         }
         const almostRightEdge = this.ctx.window.size[0] - 16;
-        if (anchor[0] + popoutPos[0] + this.bgLayer.size[0] / 2 > almostRightEdge) {
+        if (anchor[0] + maxPopoutPos[0] + this.bgLayer.size[0] / 2 > almostRightEdge) {
             // too close to the right edge
             popoutPos[0] = (almostRightEdge - this.bgLayer.size[0] / 2) - anchor[0];
         }
-        if (anchor[1] + popoutPos[1] - this.bgLayer.size[1] / 2 < 16) {
+        if (anchor[1] + maxPopoutPos[1] - this.bgLayer.size[1] / 2 < 16) {
             anchor[1] += this.size[1];
             // too close to the top edge
             popoutPos[1] = offsetY + contentsSize[1] / 2;

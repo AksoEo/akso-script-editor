@@ -51,6 +51,7 @@ export default {
         hoverOutlineWeight: 4,
         paddingX: 8,
         paddingY: 4,
+        paddingXS: 4,
         paddingYS: 2,
 
         color: [0, 0, 0, 1],

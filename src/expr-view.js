@@ -3,6 +3,7 @@ import { getProtoView } from './proto-pool';
 import { evalExpr } from './model';
 import { Dropdown } from './dropdown';
 import { Tooltip } from './tooltip';
+import { MatrixPreview } from './matrix';
 import { ValueView } from './value-view';
 import config from './config';
 
@@ -538,40 +539,35 @@ const EXPR_VIEW_IMPLS = {
             this.layer.background = config.primitives.matrix;
             this.layer.stroke = config.primitives.matrixOutline;
             this.layer.strokeWidth = config.primitives.outlineWeight;
-            this.textLayer = new TextLayer();
-            this.textLayer.font = config.identFont;
-            this.textLayer.color = config.primitives.color;
+
+            this.preview = new MatrixPreview();
 
             this.iconLayer = new PathLayer();
             this.iconLayer.path = config.icons.matrix;
             this.iconLayer.fill = config.primitives.iconColor;
         },
         deinit () {
-            delete this.textLayer;
+            delete this.preview;
             delete this.iconLayer;
         },
         tapAction () {
             // TODO: enter edit mode
         },
         layout () {
-            // TODO: better display
-            const stringify = value => {
-                if (Array.isArray(value)) return '[' + value.map(stringify).join(', ') + ']';
-                if (typeof value === 'function') return '(->)';
-                return '' + value;
-            };
-            this.textLayer.text = stringify(this.expr.value);
-
             const iconSize = config.icons.size;
             this.iconLayer.position = [4, 4];
 
-            const textSize = this.textLayer.getNaturalSize();
-            this.layer.size = [textSize[0] + iconSize + 4 + config.primitives.paddingX * 2, textSize[1] + config.primitives.paddingYS * 2];
-            this.textLayer.position = [4 + iconSize + 4, this.layer.size[1] / 2];
+            this.preview.value = this.expr.value;
+            this.preview.layoutIfNeeded();
+
+            this.layer.size = [this.preview.size[0] + iconSize + 4 + config.primitives.paddingX * 2, Math.max(iconSize, this.preview.size[1]) + config.primitives.paddingYS * 2];
+            this.preview.position = [4 + iconSize + 4, (this.layer.size[1] - this.preview.size[1]) / 2];
         },
         *iterSublayers () {
-            yield this.textLayer;
             yield this.iconLayer;
+        },
+        *iterSubviews () {
+            yield this.preview;
         },
     },
     l: {

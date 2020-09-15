@@ -7,6 +7,14 @@ window.write = write;
 
 const editor = new Editor();
 editor.load({
+    mat2d: {
+        t: 'm',
+        v: [[1, 2], [10, 20]],
+    },
+    mat3d: {
+        t: 'm',
+        v: [[[1, 2], [3, 4]], [[5, 6], [7, 8], 'unbalanced matrix!!']],
+    },
     cats: {
         t: 'c',
         f: 'sum',
