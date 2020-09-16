@@ -3,7 +3,7 @@ import { getProtoView } from './proto-pool';
 import { evalExpr } from './model';
 import { Dropdown } from './dropdown';
 import { Tooltip } from './tooltip';
-import { MatrixPreview } from './matrix';
+import { editMatrix, MatrixPreview } from './matrix';
 import { ValueView } from './value-view';
 import config from './config';
 
@@ -551,7 +551,11 @@ const EXPR_VIEW_IMPLS = {
             delete this.iconLayer;
         },
         tapAction () {
-            // TODO: enter edit mode
+            editMatrix(this.ctx, this.expr.value, () => {
+                this.expr.ctx.notifyMutation(this.expr);
+                this.needsLayout = true;
+                this.preview.needsLayout = true;
+            });
         },
         layout () {
             const iconSize = config.icons.size;

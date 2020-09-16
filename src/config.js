@@ -96,6 +96,34 @@ export default {
         switchOtherwise: 'otherwise',
     },
 
+    matrix: {
+        backdrop: [1, 1, 1, 0.3],
+        background: [1, 1, 1, 1],
+        cellSpacing: 4,
+        minCellWidth: 60,
+        minCellHeight: 30,
+
+        selectionColor: [0.1, 0.3, 0.6, 1],
+        selectionBoundSize: 8,
+        selectionOutlineWidth: 2,
+
+        cellTypes: {
+            null: 'null',
+            bool: 'bool',
+            number: 'number',
+            string: 'text',
+            matrix: 'matrix',
+        },
+        typeSwitch: {
+            background: [0.9, 0.9, 0.9, 1],
+            color: [0, 0, 0, 1],
+            activeBackground: [0.3, 0.3, 0.3, 1],
+            activeColor: [1, 1, 1, 1],
+            paddingX: 8,
+            paddingY: 4,
+        },
+    },
+
     defs: {
         background: [0.9, 0.9, 0.9, 1],
         newDefName: n => `new def (${n})`,

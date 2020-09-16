@@ -67,7 +67,7 @@ export class ViewRoot {
         if (this.capturedInputTarget) {
             candidates = [this.capturedInputTarget];
         } else {
-            const targets = this.getTargetsAtPoint(x, y, true);
+            const targets = this.getTargetsAtPoint(x, y);
             // targets are sorted by depth, so the last one will be deepest and should have the
             // highest priority
             candidates = targets.reverse();
