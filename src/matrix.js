@@ -1,4 +1,4 @@
-import { Window, View, Gesture, Transaction, Layer, TextLayer } from './ui';
+import { Window, View, Gesture, Transaction, Layer, TextLayer, PathLayer } from './ui';
 import config from './config';
 
 function shallowEq (a, b) {
@@ -292,9 +292,9 @@ class MatrixEditor extends View {
 function transmuteCellValue (value, type) {
     const valueType = typeof value === 'boolean' ? 'bool'
         : typeof value === 'number' ? 'number'
-        : typeof value === 'string' ? 'string'
-        : Array.isArray(value) ? 'matrix'
-        : 'null';
+            : typeof value === 'string' ? 'string'
+                : Array.isArray(value) ? 'matrix'
+                    : 'null';
     if (valueType === type) return value;
     if (type === 'null') return null;
 
@@ -328,6 +328,12 @@ class MatrixTableView extends View {
         this.cellsContainer = new View();
         this.cellsContainer.wantsChildLayout = true;
         this.addSubview(this.cellsContainer);
+
+        this.extensionX = new TableExtension(this.onExtendX);
+        this.extensionY = new TableExtension(this.onExtendY);
+        this.addSubview(this.extensionX);
+        this.addSubview(this.extensionY);
+
         this.selectionView = new EditorSelection();
         this.addSubview(this.selectionView);
 
@@ -358,16 +364,122 @@ class MatrixTableView extends View {
         return v === undefined ? null : v;
     }
 
+    onExtendX = () => {
+        for (let i = 0; i < this.value.length; i++) {
+            // 2d-ify any row that's not already 2d
+            if (!Array.isArray(this.value[i])) {
+                this.value[i] = [this.value[i]];
+            }
+            // add another item
+            this.value[i].push(null);
+        }
+        const t = new Transaction(1, 0.3);
+        this.layout();
+        t.commitAfterLayout(this.ctx);
+        this.onMutation();
+    };
+    onExtendY = () => {
+        const is2D = this.value.map(x => Array.isArray(x)).reduce((a, b) => a || b, false);
+        if (is2D) {
+            const width = this.get2DSize()[0];
+            this.value.push([...new Array(width)].map(() => null));
+        } else {
+            this.value.push(null);
+        }
+
+        const t = new Transaction(1, 0.3);
+        this.layout();
+        t.commitAfterLayout(this.ctx);
+        this.onMutation();
+    };
+    onDeleteRow = row => {
+        this.value.splice(row, 1);
+        // shift cells by 1 and put the ones at row at the end so they'll be the ones that get
+        // deleted
+        this.#cells.push(this.#cells.splice(row, 1)[0]);
+        const t = new Transaction(1, 0.3);
+        this.fixSelection();
+        this.layout();
+        t.commitAfterLayout(this.ctx);
+        this.onMutation();
+    };
+    onDeleteCol = col => {
+        let width = 0;
+        for (let y = 0; y < this.value.length; y++) {
+            if (Array.isArray(this.value[y]) && col < this.value[y].length) {
+                this.value[y].splice(col, 1);
+            }
+            if (Array.isArray(this.value[y])) width = Math.max(width, this.value[y].length);
+
+            // shift cells by 1 and put the ones at col at the end so they'll be the ones that get
+            // deleted
+            const cellRow = this.#cells[y];
+            if (col < cellRow.length) {
+                cellRow.push(cellRow.splice(col, 1)[0]);
+            }
+        }
+
+        // if there's only one column left, 1d-ify
+        if (width === 1) {
+            for (let i = 0; i < this.value.length; i++) {
+                if (Array.isArray(this.value[i])) {
+                    if (this.value[i].length) this.value[i] = this.value[i][0];
+                    else this.value[i] = null;
+                }
+            }
+        }
+
+        const t = new Transaction(1, 0.3);
+        this.fixSelection();
+        this.layout();
+        t.commitAfterLayout(this.ctx);
+        this.onMutation();
+    };
+
+    fixSelection () {
+        const size = this.get2DSize();
+        const minX = 0;
+        const maxX = size[0] - 1;
+        const minY = 0;
+        const maxY = size[1] - 1;
+        this.selection.start[0] = Math.max(minX, Math.min(this.selection.start[0], maxX));
+        this.selection.start[1] = Math.max(minY, Math.min(this.selection.start[1], maxY));
+        this.selection.end[0] = Math.max(minX, Math.min(this.selection.end[0] - 1, maxX)) + 1;
+        this.selection.end[1] = Math.max(minY, Math.min(this.selection.end[1] - 1, maxY)) + 1;
+    }
+
     #cells = [];
+    #rowHeaders = [];
+    #colHeaders = [];
     layout () {
         super.layout();
         const size = this.get2DSize();
 
         // adjust row and column count
-        while (this.#cells.length < size[1]) this.#cells.push([]);
+        while (this.#cells.length < size[1]) {
+            this.#cells.push([]);
+
+            const row = this.#rowHeaders.length;
+            const rh = new TableHeader('row');
+            rh.onDelete = () => this.onDeleteRow(row);
+            this.cellsContainer.addSubview(rh);
+            this.#rowHeaders.push(rh);
+        }
         while (this.#cells.length > size[1]) {
             const row = this.#cells.pop();
             for (const cell of row) this.cellsContainer.removeSubview(cell);
+
+            this.cellsContainer.removeSubview(this.#rowHeaders.pop());
+        }
+        while (this.#colHeaders.length < size[0]) {
+            const col = this.#colHeaders.length;
+            const ch = new TableHeader('col');
+            ch.onDelete = () => this.onDeleteCol(col);
+            this.cellsContainer.addSubview(ch);
+            this.#colHeaders.push(ch);
+        }
+        while (this.#colHeaders.length > size[0]) {
+            this.cellsContainer.removeSubview(this.#colHeaders.pop());
         }
         for (let row = 0; row < size[1]; row++) {
             while (this.#cells[row].length < size[0]) {
@@ -386,8 +498,9 @@ class MatrixTableView extends View {
             }
         }
 
-        const rowSizes = [...new Array(size[1])].map(x => 0);
-        const colSizes = [...new Array(size[0])].map(x => 0);
+        // calculate row and column sizes
+        const rowSizes = [...new Array(size[1])].map(() => 0);
+        const colSizes = [...new Array(size[0])].map(() => 0);
         for (let y = 0; y < size[1]; y++) {
             for (let x = 0; x < size[0]; x++) {
                 const cell = this.#cells[y][x];
@@ -397,15 +510,29 @@ class MatrixTableView extends View {
                 rowSizes[y] = Math.max(rowSizes[y], cellSize[1]);
                 colSizes[x] = Math.max(colSizes[x], cellSize[0]);
             }
+
+            this.#rowHeaders[y].headerSize = rowSizes[y];
+            this.#rowHeaders[y].layoutIfNeeded();
+        }
+        for (let x = 0; x < size[0]; x++) {
+            this.#colHeaders[x].headerSize = colSizes[x];
+            this.#colHeaders[x].layoutIfNeeded();
         }
 
-        let rowPositions = [];
-        let colPositions = [];
-        let posX = 0;
-        let posY = 0;
+        if (colSizes.length === 1 && !colSizes[0]) {
+            // only 1 column and empty; fix width
+            colSizes[0] = config.matrix.minCellWidth;
+        }
+
+        // layout cells
+        const rowPositions = [];
+        const colPositions = [];
+        const posX0 = this.#rowHeaders[0] ? this.#rowHeaders[0].size[0] : 0;
+        let posX = posX0;
+        let posY = this.#colHeaders[0] ? this.#colHeaders[0].size[1] : 0;
         for (let y = 0; y < size[1]; y++) {
             if (posY) posY += config.matrix.cellSpacing;
-            posX = 0;
+            posX = posX0;
             rowPositions[y] = posY - config.matrix.cellSpacing / 2;
 
             for (let x = 0; x < size[0]; x++) {
@@ -424,6 +551,31 @@ class MatrixTableView extends View {
             posY += rowSizes[y];
         }
         rowPositions.push(posY + config.matrix.cellSpacing / 2);
+
+        let isEmpty = false;
+        if (!rowSizes.length) {
+            isEmpty = true;
+            // empty; fix posX
+            posX += colSizes[0];
+            posY += config.matrix.minCellHeight;
+        }
+
+        while (colPositions.length < 2) colPositions.push(colPositions[0] || 0);
+        while (rowPositions.length < 2) rowPositions.push(rowPositions[0] || 0);
+
+        for (let y = 0; y < this.#rowHeaders.length; y++) {
+            this.#rowHeaders[y].position = [0, rowPositions[y]];
+        }
+        for (let x = 0; x < this.#colHeaders.length; x++) {
+            this.#colHeaders[x].position = [colPositions[x], 0];
+        }
+
+        this.extensionX.layer.opacity = isEmpty ? 0 : 1;
+
+        this.extensionX.position = [posX, 0];
+        this.extensionY.position = [0, posY];
+        posX += this.extensionX.size[0];
+        posY += this.extensionY.size[1];
 
         this.colPositions = colPositions;
         this.rowPositions = rowPositions;
@@ -470,7 +622,9 @@ class MatrixTableView extends View {
             }
         }
         this.onMutation();
-        this.needsLayout = true;
+        const t = new Transaction(1, 0.3);
+        this.layout();
+        t.commit();
     };
 
     setCellType (x, y, type) {
@@ -570,6 +724,143 @@ class MatrixTableView extends View {
     };
 }
 
+class TableHeader extends View {
+    constructor (type) {
+        super();
+        this.type = type;
+        this.needsLayout = true;
+
+        this.layer.background = config.matrix.tableHeader.background;
+        this.layer.cornerRadius = config.cornerRadius;
+        this.deleteLayer = new Layer();
+        this.deleteLayer.cornerRadius = config.cornerRadius;
+        this.addSublayer(this.deleteLayer);
+
+        this.deleteIcon = new PathLayer();
+        this.deleteIcon.path = config.icons.delete;
+        this.deleteLayer.addSublayer(this.deleteIcon);
+
+        Gesture.onTap(this, this.onTap);
+    }
+
+    onTap = ({ x, y }) => {
+        const px = x - this.position[0];
+        const py = y - this.position[1];
+        if (px < this.deleteLayer.size[0] && py < this.deleteLayer.size[1] && this.onDelete) {
+            this.onDelete();
+        }
+    };
+
+    #headerSize = 0;
+    get headerSize () {
+        return this.#headerSize;
+    }
+    set headerSize (v) {
+        if (v === this.#headerSize) return;
+        this.#headerSize = v;
+        this.layout();
+    }
+
+    hovering = false;
+
+    layout () {
+        super.layout();
+
+        this.deleteLayer.background = this.hovering
+            ? config.matrix.tableHeader.delete
+            : config.matrix.tableHeader.deleteIdle;
+        this.deleteIcon.fill = this.hovering
+            ? config.matrix.tableHeader.deleteColor
+            : config.matrix.tableHeader.deleteColorIdle;
+        this.deleteLayer.size = [20, 20];
+        this.deleteIcon.position = [
+            (this.deleteLayer.size[0] - config.icons.size) / 2,
+            (this.deleteLayer.size[1] - config.icons.size) / 2,
+        ];
+
+        if (this.type === 'row') {
+            this.size = [20, this.headerSize];
+        } else {
+            this.size = [this.headerSize, 20];
+        }
+    }
+
+    updatePointer (x, y) {
+        const px = x - this.position[0];
+        const py = y - this.position[1];
+        if (px < this.deleteLayer.size[0] && py < this.deleteLayer.size[0]) {
+            if (!this.hovering) {
+                const t = new Transaction(1, 0.1);
+                this.hovering = true;
+                this.layout();
+                t.commit();
+            }
+        } else if (this.hovering) {
+            const t = new Transaction(1, 0.3);
+            this.hovering = false;
+            this.layout();
+            t.commit();
+        }
+    }
+    onPointerEnter ({ x, y }) {
+        this.updatePointer(x, y);
+    }
+    onPointerMove ({ x, y }) {
+        this.updatePointer(x, y);
+    }
+    onPointerExit () {
+        this.updatePointer(Infinity, 0);
+    }
+}
+
+class TableExtension extends View {
+    constructor (onExtend) {
+        super();
+
+        this.layer.background = config.matrix.tableExtension.background;
+        this.layer.cornerRadius = config.cornerRadius;
+        this.needsLayout = true;
+
+        this.iconLayer = new PathLayer();
+        this.iconLayer.path = config.icons.add;
+        this.addSublayer(this.iconLayer);
+
+        Gesture.onTap(this, onExtend);
+    }
+
+    hovering = false;
+
+    layout () {
+        super.layout();
+
+        this.layer.background = this.hovering
+            ? config.matrix.tableExtension.background
+            : config.matrix.tableExtension.backgroundIdle;
+        this.iconLayer.fill = this.hovering
+            ? config.matrix.tableExtension.color
+            : config.matrix.tableExtension.colorIdle;
+
+        this.layer.size = [20, 20];
+        this.iconLayer.position = [
+            (this.layer.size[0] - config.icons.size) / 2,
+            (this.layer.size[1] - config.icons.size) / 2,
+        ];
+    }
+
+    onPointerEnter () {
+        const t = new Transaction(1, 0.1);
+        this.hovering = true;
+        this.layout();
+        t.commit();
+    }
+    onPointerExit () {
+        const t = new Transaction(1, 0.3);
+        this.hovering = false;
+        this.layout();
+        t.commit();
+    }
+}
+
 /// A single cell in the editor.
 class MatrixCell extends View {
     onMutation = () => {};
@@ -640,7 +931,6 @@ class MatrixCell extends View {
     /// Call getCellSize first!!
     layout () {
         super.layout();
-        const textSize = this.layoutTextSize;
         if (this.textLayer.align === 'center') {
             this.textLayer.position = [
                 this.layer.size[0] / 2,
@@ -695,7 +985,7 @@ class MatrixCell extends View {
 
 /// Shows editor status such as selected cell count, cell index, etc.
 class EditorStatus extends View {
-
+    // TODO
 }
 
 /// Editor cell type switch at the top.

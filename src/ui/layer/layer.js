@@ -47,11 +47,14 @@ export class Layer extends BaseLayer {
             }
             if (!keyframes.length) return;
 
-            const anim = this.#position.waAnimation = new Animation(new KeyframeEffect(this.node, {
+            const anim = new Animation(new KeyframeEffect(this.node, {
                 transform: keyframes,
             }, {
                 duration: keyframes.length * 1000 / 60,
             }));
+            this.#position.waAnimation = anim;
+            this.#scale.waAnimation = anim;
+            this.#rotation.waAnimation = anim;
             anim.play();
         };
         const waSizeCommit = (k) => {

@@ -53,7 +53,7 @@ function writeIdent (ident) {
 
 function writeMatrix (matrix) {
     const s = '[' + matrix.map(item => {
-        if (typeof item === 'null') return writeExpr({ type: 'u' }).nop();
+        if (item === null) return writeExpr({ type: 'u' }).nop();
         if (typeof item === 'boolean') return writeExpr({ type: 'b', value: item }).nop();
         if (typeof item === 'number') return writeExpr({ type: 'n', value: item }).nop();
         if (typeof item === 'string') return writeExpr({ type: 's', value: item }).nop();
