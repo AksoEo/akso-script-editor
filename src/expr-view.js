@@ -318,7 +318,25 @@ const EXPR_VIEW_IMPLS = {
         layout () {
             this.textLayer.text = this.expr.name;
             this.layer.strokeWidth = config.primitives.outlineWeight;
-            if (!this._isDemo && !this.isDef && !this.expr.name.startsWith('@') && !this.expr.refNode) {
+
+            let isBroken = false;
+            if (!this._isDemo && !this.isDef) {
+                const isFormVar = this.expr.name.startsWith('@');
+                if (isFormVar) {
+                    const formVarName = this.expr.name.substr(1);
+                    isBroken = true;
+                    for (const i of this.expr.ctx.formVars) {
+                        if (i.name === formVarName) {
+                            isBroken = false;
+                            break;
+                        }
+                    }
+                } else {
+                    isBroken = !this.expr.refNode;
+                }
+            }
+
+            if (isBroken) {
                 this.iconLayer.path = config.icons.refBroken;
                 this.layer.background = config.primitives.refBroken;
                 this.layer.stroke = config.primitives.refBrokenOutline;

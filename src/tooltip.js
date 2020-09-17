@@ -87,10 +87,13 @@ export class Tooltip extends View {
     }
 
     time = 0;
+    lastTime = 0;
 
     layout () {
         const time = this.time;
-        this.time += 1 / 60; // close enough
+        const deltaTime = (Date.now() - this.lastTime) / 1000;
+        this.lastTime = Date.now();
+        this.time += Math.max(1 / 244, Math.min(deltaTime, 1 / 30));
 
         if (!this.ctx.window) {
             this.innerView.layer.opacity = 0;

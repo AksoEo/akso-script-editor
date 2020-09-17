@@ -129,10 +129,38 @@ class FormVarItem extends View {
 
     onRename = name => {
         name = name.replace(/^@+/, ''); // strip leading @ signs
-        // TODO: find duplicates
-        // TODO: find references
         const t = new Transaction(1, 0.3);
+        const replaceName = '@' + this.var.name;
         this.var.name = name;
+        const newName = '@' + this.var.name;
+
+        // find references to this form var and rename them
+        const refSources = new Set();
+        for (const ref of this.ctx.modelCtx.formVarRefs) {
+            if (ref.name !== replaceName) continue;
+            refSources.add(ref.source);
+            if (ref.source.type === 'r') {
+                ref.source.name = newName;
+            } else if (ref.source.type === 'c') {
+                ref.source.func.name = newName;
+            } else {
+                console.warn(`Failed to rename to ${name} in ref with type ${ref.source.type}`);
+            }
+            ref.source.ctx.notifyMutation(ref.source);
+        }
+
+        setTimeout(() => {
+            // a bit hacky: wait for refs to update
+            // refs have now updated; do we have any new ones?
+            for (const ref of this.ctx.modelCtx.formVarRefs) {
+                if (ref.name !== newName) continue;
+                if (!refSources.has(ref.source)) {
+                    // they need updating too
+                    ref.source.ctx.notifyMutation(ref.source);
+                }
+            }
+        }, 10);
+
         this.ctx.modelCtx.notifyFormVarsMutation();
         this.needsLayout = true;
         t.commitAfterLayout(this.ctx);

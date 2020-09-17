@@ -1,4 +1,4 @@
-import { evaluate, analyze } from '@tejo/akso-script';
+import { evaluate, analyze, NULL, BOOL, NUMBER, STRING, TypeVar, array } from '@tejo/akso-script';
 import { infixIdentRegexF } from './asct/shared';
 import config from './config';
 
@@ -38,6 +38,7 @@ export function createContext () {
             }
         },
         formVars: [],
+        formVarRefs: new Set(), // all exprs that reference form vars
         onFormVarsMutation: listener => fvMutationListeners.push(listener),
         notifyFormVarsMutation: () => {
             for (const listener of fvMutationListeners) {
@@ -432,11 +433,18 @@ export function makeStdRefs () {
     return refs;
 }
 
+const FORM_VAR = Symbol('form var'); // form var ref sentinel value
+
 /// Resolves refs in defs.
 export function resolveRefs (defs, parentScope) {
+    const ctx = defs.ctx;
+
     if (!parentScope) {
+        // if there's no parent scope, we'll use the standard library
         parentScope = makeStdRefs();
     }
+
+    // an index of def name -> def object
     const defIndex = new Map(parentScope);
 
     for (const def of defs.defs) {
@@ -453,9 +461,9 @@ export function resolveRefs (defs, parentScope) {
         def.referencedBy = new Set();
 
         for (const ref of refs) {
-            const { target, expr } = ref;
+            const { target, name, expr } = ref;
             if (!reverseRefs.has(target)) reverseRefs.set(target, new Set());
-            reverseRefs.get(target).add({ def, source: expr });
+            reverseRefs.get(target).add({ def, source: expr, name });
         }
     }
 
@@ -466,23 +474,35 @@ export function resolveRefs (defs, parentScope) {
         expr.references = refs;
 
         for (const ref of refs) {
-            const { target, expr } = ref;
+            const { target, name, expr } = ref;
             if (!reverseRefs.has(target)) reverseRefs.set(target, new Set());
-            reverseRefs.get(target).add({ def: null, source: expr });
+            reverseRefs.get(target).add({ def: null, source: expr, name });
         }
     }
+
+    // single out refs to special FORM_VAR value
+    ctx.formVarRefs = reverseRefs.get(FORM_VAR) || new Set();
+    reverseRefs.delete(FORM_VAR);
 
     for (const [def, refs] of reverseRefs) {
         def.referencedBy = refs;
     }
 }
 
+/// Resolves refs in the given expression, recursively
 function resolveRefsInExpr (expr, defs, refs, _srcOverride = null) {
     if (!expr) return;
     if (expr.type === 'r') {
         // this is a ref!
-        expr.refNode = defs.get(expr.name);
-        if (expr.refNode) refs.add({ target: expr.refNode, expr: _srcOverride || expr });
+        if (expr.name.startsWith('@')) {
+            // this is a form var ref
+            // ONLY add a reverse ref
+            refs.add({ target: FORM_VAR, name: expr.name, expr: _srcOverride || expr });
+        } else {
+            // this is a regular ref
+            expr.refNode = defs.get(expr.name);
+            if (expr.refNode) refs.add({ target: expr.refNode, expr: _srcOverride || expr });
+        }
     } else if (expr.type === 'l') {
         for (const item of expr.items) {
             resolveRefsInExpr(item, defs, refs);
@@ -550,7 +570,17 @@ export function evalExpr (expr) {
 
     let analysis = null;
     try {
-        analysis = analyze(rawDefs, out, {});
+        analysis = analyze(rawDefs, out, id => {
+            for (const fv of expr.ctx.formVars) {
+                if (fv.name === id) {
+                    if (fv.type === 'u') return NULL;
+                    if (fv.type === 'b') return BOOL;
+                    if (fv.type === 'n') return NUMBER;
+                    if (fv.type === 's') return STRING;
+                    if (fv.type === 'm') return array(new TypeVar());
+                }
+            }
+        });
     } catch (err) {
         console.debug(err);
         return null;

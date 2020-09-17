@@ -1,4 +1,6 @@
 import { Window, View, Gesture, Transaction, Layer, TextLayer, PathLayer } from './ui';
+import { ValueView } from './value-view';
+import { Tooltip } from './tooltip';
 import config from './config';
 
 function shallowEq (a, b) {
@@ -21,8 +23,12 @@ export class MatrixPreview extends View {
         return this.#value;
     }
     set value (v) {
-        if (v === this.#value) return;
-        this.#value = v;
+        if (shallowEq(this.value, v)) {
+            if (!Array.isArray(this.value) || this.value.map((x, i) => shallowEq(x, v[i]))) return;
+        }
+        const vClone = v.slice();
+        for (let i = 0; i < vClone.length; i++) if (Array.isArray(vClone[i])) vClone[i] = vClone[i].slice();
+        this.#value = vClone;
         this.needsLayout = true;
     }
 
@@ -875,6 +881,11 @@ class MatrixCell extends View {
         this.textLayer.font = config.identFont;
         this.textLayer.color = config.primitives.color;
 
+        this.previewTooltip = new Tooltip();
+        this.previewView = new ValueView();
+        this.addSubview(this.previewTooltip);
+        this.previewTooltip.contents = this.previewView;
+
         this.needsLayout = true;
     }
 
@@ -947,6 +958,9 @@ class MatrixCell extends View {
                 this.layer.size[1] / 2,
             ];
         }
+
+        this.previewTooltip.size = this.layer.size;
+        this.previewTooltip.layoutIfNeeded();
     }
 
     beginEditing () {
@@ -978,8 +992,23 @@ class MatrixCell extends View {
                 new Transaction(1, 0.3).commitAfterLayout(this.ctx);
             });
         } else if (this.type === 'matrix') {
-            editMatrix(this.ctx, this.value, this.onMutation);
+            editMatrix(this.ctx, this.value, () => {
+                this.onMutation();
+            });
         }
+    }
+
+    onPointerEnter () {
+        if (this.type === 'matrix') {
+            this.previewView.value = this.value;
+            this.previewView.layout();
+            this.previewTooltip.visible = true;
+        } else {
+            this.previewView.value = null;
+        }
+    }
+    onPointerExit () {
+        this.previewTooltip.visible = false;
     }
 }
 
@@ -1079,6 +1108,8 @@ class CellTypeSwitchItem extends View {
 class EditorSelection extends View {
     constructor () {
         super();
+
+        this.decorationOnly = true;
 
         this.boundStart = new Layer();
         this.boundEnd = new Layer();

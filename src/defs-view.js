@@ -427,10 +427,20 @@ export class DefView extends View {
     }
 
     cachedValue = undefined;
+    cachedError = true;
     updateValue () {
+        this.cachedError = false;
         // do we want a preview value?
-        let wantPreview = false;
-        if (this.def.expr) {
+        const result = evalExpr(this.def.expr);
+        if (!result) {
+            this.cachedValue = undefined;
+            this.cachedError = true;
+            return;
+        }
+
+        // we always want a preview if it's an error
+        let wantPreview = !result.analysis.valid;
+        if (!wantPreview && this.def.expr) {
             const previewTypes = ['c', 'r', 'l', 'w'];
             if (previewTypes.includes(this.def.expr.type)) wantPreview = true;
         }
@@ -438,12 +448,11 @@ export class DefView extends View {
             this.cachedValue = undefined;
             return;
         }
-        const result = evalExpr(this.def.expr);
-        if (!result) {
+        if (!result.analysis.valid) {
             this.cachedValue = undefined;
+            this.cachedError = true;
             return;
         }
-
         this.cachedValue = result.result;
     }
 
@@ -554,7 +563,6 @@ export class DefView extends View {
             ref.source.ctx.notifyMutation(ref.source);
         }
 
-
         this.def.ctx.notifyMutation(this.def);
 
         setTimeout(() => {
@@ -589,6 +597,8 @@ export class DefView extends View {
         this.exprSlot.layoutIfNeeded();
 
         this.valueView.value = this.cachedValue;
+        this.valueView.error = this.cachedError;
+        this.valueView.hidden = !this.cachedError && this.cachedValue === undefined;
         this.valueView.layoutIfNeeded();
 
         const { padding } = config.def;
@@ -642,12 +652,19 @@ class DefValueView extends View {
     set value (v) {
         this.inner.value = v;
     }
+    get error () {
+        return this.inner.error;
+    }
+    set error (v) {
+        this.inner.error = v;
+    }
+    hidden = false;
     layout () {
         super.layout();
         this.inner.layoutIfNeeded();
 
         let ownSize;
-        if (this.inner.size[0]) {
+        if (this.inner.size[0] && !this.hidden) {
             // non-zero size means it has a value
             ownSize = [
                 this.inner.size[0] + 12,
@@ -658,6 +675,7 @@ class DefValueView extends View {
         }
 
         this.inner.position = [6, 6];
+        this.layer.opacity = this.hidden ? 0 : 1;
 
         this.layer.size = ownSize;
         this.arrowLayer.start = [0, ownSize[1] / 2];
