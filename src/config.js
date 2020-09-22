@@ -60,6 +60,7 @@ export default {
         trueNameColor: [0, 0, 0, 0.5],
         iconColor: [0, 0, 0, 0.7],
         iconColor0: [0, 0, 0, 0],
+        refOnlyColor: [0, 0, 0, 0.5],
 
         error: [1, 0.3, 0.4, 1],
         errorOutline: [0.3, 0, 0, 1],

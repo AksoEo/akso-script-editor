@@ -1,12 +1,15 @@
-import { Window, ViewRoot } from './ui';
+import { Window, ViewRoot, RenderViewRoot } from './ui';
 import { EditorView } from './editor-view';
 import { CodeEditor } from './code-editor';
 import { TextInput } from './text-input';
 import { lex } from './asct/lex';
 import { parse } from './asct/parse';
 import { write } from './asct/write';
+import { ExprSlot, ExprView } from './expr-view';
 
+export { RenderViewRoot, ExprSlot, ExprView };
 export { lex, parse, write };
+export * as model from './model';
 
 /// An AKSO Script editor.
 export default class Editor {
@@ -53,6 +56,18 @@ export default class Editor {
 
     save () {
         return this.editor.getRawRoot();
+    }
+
+    loadInRawExprMode (expr, onClose) {
+        this.editor.setRawExpr(expr, onClose);
+    }
+
+    saveRawExpr () {
+        return this.editor.getRawExpr();
+    }
+
+    destroy () {
+        this.root.destroy();
     }
 }
 

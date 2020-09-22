@@ -35,6 +35,17 @@ export class DefsView extends View {
         Gesture.onScroll(this, this.onScroll);
     }
 
+    setRawExprMode (onClose) {
+        this.layer.background = [0, 0, 0, 0];
+        this.addDefView = null;
+        this.rawExprView = new StandaloneExprView(this.defs.ctx, this.dragController);
+        this.scrollAnchor.addSubview(this.rawExprView);
+
+        Gesture.onTap(this, onClose);
+
+        this.flushSubviews();
+    }
+
     updateValues () {
         this.needsValueUpdate = false;
         for (const def of this.defs.defs) {
@@ -256,10 +267,13 @@ export class DefsView extends View {
             i++;
         }
 
-        this.addDefView.parentWidth = this.size[0];
-        this.addDefView.layout();
-        this.addDefView.position = [0, y];
-        y += this.addDefView.size[1] + 24;
+        if (this.addDefView) {
+            this.addDefView.parentWidth = this.size[0];
+            this.addDefView.layout();
+            this.addDefView.position = [0, y];
+            y += this.addDefView.size[1];
+        }
+        y += 24;
 
         if (this.tentativeDef && this.tentativeInsertPos === null) {
             // did not find an insertion point; probably because it’s out of bounds
@@ -381,6 +395,60 @@ class DefsArrows extends View {
     arrows = [];
     *iterSublayers () {
         for (const arrows of this.arrows.values()) for (const arrow of arrows.values()) yield arrow;
+    }
+}
+
+/// Contains a standalone expression. Used for raw expr mode.
+class StandaloneExprView extends View {
+    wantsChildLayout = true;
+    constructor (modelCtx, dragController) {
+        super();
+
+        this.def = {
+            type: 'ds',
+            ctx: modelCtx,
+            expr: null,
+            name: 'standalone expression',
+            parent: null,
+            flatExpr: true,
+        };
+        viewPool.set(this.def, this);
+
+        this.dragController = dragController;
+        this.exprSlot = new ExprSlot(expr => {
+            this.def.expr = expr;
+            expr.parent = this.def;
+            this.def.ctx.notifyMutation(expr);
+            this.def.ctx.notifyMutation(this.def);
+        }, this.def.ctx);
+        this.addSubview(this.exprSlot);
+        this.needsLayout = true;
+
+        // dummy to prevent DefsView tap handler from being called
+        Gesture.onTap(this, () => {});
+    }
+
+    get expr () {
+        return this.def.expr;
+    }
+    set expr (e) {
+        this.exprSlot.insertExpr(e);
+    }
+
+    layout () {
+        super.layout();
+
+        this.exprSlot.expr = this.def.expr;
+        this.exprSlot.exprCtx = this.def.ctx;
+        this.exprSlot.dragController = this.dragController;
+        this.exprSlot.layoutIfNeeded();
+        this.layer.background = config.def.background;
+        this.layer.cornerRadius = config.def.cornerRadius;
+        this.exprSlot.position = [config.def.padding, config.def.padding];
+        this.layer.size = [
+            this.exprSlot.size[0] + config.def.padding * 2,
+            this.exprSlot.size[1] + config.def.padding * 2,
+        ];
     }
 }
 

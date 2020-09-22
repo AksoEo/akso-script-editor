@@ -24,6 +24,17 @@ export class EditorView extends View {
         return this.canvasView.getRawRoot();
     }
 
+    /// Loads a raw asc root node for raw expr mode.
+    /// This mode can be entered but cannot be left!!
+    /// In this mode, the only thing being edited is this expression.
+    setRawExpr (expr, onClose) {
+        this.canvasView.setRawExprMode(onClose);
+        this.canvasView.setRawRootExpr(expr);
+    }
+    getRawExpr () {
+        return this.canvasView.getRawRootExpr();
+    }
+
     *iterSubviews () {
         yield this.canvasView;
         yield this.toolbar;

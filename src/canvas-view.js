@@ -1,5 +1,5 @@
 import { View, Transaction } from './ui';
-import { createContext, fromRawDefs, toRawDefs, resolveRefs } from './model';
+import { createContext, fromRawDefs, toRawDefs, fromRawExpr, toRawExpr, resolveRefs } from './model';
 import { viewPool } from './proto-pool';
 import { DefsView } from './defs-view';
 import { Library } from './library';
@@ -30,6 +30,23 @@ export class CanvasView extends View {
         this.defsView = new DefsView(this.root);
         this.library = new Library(this.defsView);
         this.library.onRequestLinearView = () => this.exitGraphView();
+
+        this.addSubview(this.library);
+        this.addSubview(this.defsView);
+    }
+
+    isInRawExprMode = false;
+    setRawExprMode (onClose) {
+        this.isInRawExprMode = true;
+        this.defsView.setRawExprMode(onClose);
+    }
+    setRawRootExpr (expr) {
+        this.defsView.rawExprView.expr = fromRawExpr(expr, () => null, this.modelCtx);
+    }
+    getRawRootExpr () {
+        const expr = this.defsView.rawExprView.expr;
+        if (!expr) return { t: 'u' };
+        return toRawExpr(expr, () => {});
     }
 
     #mutations = null;
@@ -70,6 +87,7 @@ export class CanvasView extends View {
         t.commitAfterLayout(this.ctx);
     }
     enterGraphView () {
+        if (this.isInRawExprMode) return;
         const t = new Transaction(1, 1);
         this.defsView.useGraphView = true;
         this._libraryWasOpen = this.library.isOpen;
@@ -149,10 +167,5 @@ export class CanvasView extends View {
     resolveRefs () {
         resolveRefs(this.root);
         this.needsLayout = true;
-    }
-
-    *iterSubviews () {
-        yield this.library;
-        yield this.defsView;
     }
 }

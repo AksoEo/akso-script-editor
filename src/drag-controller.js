@@ -127,7 +127,7 @@ export class DragController {
         ];
     }
     moveExprDrag (x, y) {
-        this.moveDrag(x, y, ExprView);
+        this.moveDrag(x, y, ExprView, slot => !slot.acceptsExpr || slot.acceptsExpr(this.#draggingNode));
     }
     endExprDrag () {
         this.defs.showTrash = false;

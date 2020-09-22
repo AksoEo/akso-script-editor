@@ -1,29 +1,19 @@
 import PointerTracker from 'pointer-tracker';
-import { svgNS } from './layer/base';
 import { Gesture } from './gesture';
+import { RenderViewRoot } from './render-view-root';
 
-/// View root handler. Handles interfacing with the DOM and time.
-export class ViewRoot {
-    /// a stack of windows. the topmost is the active one.
-    windows = [];
+/// View root handler. Handles interfacing with the DOM and time. Has a fixed size.
+export class ViewRoot extends RenderViewRoot {
+    wantsChildLayout = false;
 
     constructor () {
-        this.node = document.createElement('div');
-        this.node.setAttribute('class', 'asce-view-root');
-        this.svgNode = document.createElementNS(svgNS, 'svg');
-        this.svgNode.setAttribute('class', 'asce-inner-view-root');
-        this.svgNode.style.cursor = 'default';
-        this.svgNode.style.webkitUserSelect = this.svgNode.style.userSelect = 'none';
-
-        this.node.style.position = 'relative';
-
-        this.node.appendChild(this.svgNode);
+        super();
 
         this.node.addEventListener('touchstart', e => e.preventDefault());
         this.node.addEventListener('touchmove', e => e.preventDefault());
         this.node.addEventListener('touchend', e => e.preventDefault());
 
-        // TODO: fix this
+        // TODO: fix this (does not cancel events)
         const self = this;
         this.pointerTracker = new PointerTracker(this.svgNode, {
             start (pointer, event) {
@@ -44,16 +34,8 @@ export class ViewRoot {
         this.svgNode.addEventListener('wheel', this.#onWheel);
         this.svgNode.addEventListener('mousemove', this.#onMouseMove);
 
-        this.ctx = {
-            render: {
-                scheduleLayout: this.scheduleLayout,
-                scheduleDisplay: this.scheduleDisplay,
-                scheduleCommitAfterLayout: this.scheduleCommitAfterLayout,
-            },
-            nodesAtPoint: this.getNodesAtPoint,
-            beginCapture: this.beginCapture,
-            push: this.ctxPushWindow,
-        };
+        this.ctx.beginCapture = this.beginCapture;
+        this.ctx.push = this.ctxPushWindow;
     }
 
     #trackedPointers = new Map();
@@ -104,44 +86,6 @@ export class ViewRoot {
             targets: chosenTargets,
             gestures,
         });
-    };
-
-    #getNodesAtPointInner = (x, y, ox, oy, layer, targets) => {
-        if (layer.owner && layer.owner.decorationOnly) return;
-
-        let doSublayers = false;
-        const pos = layer.position;
-        const size = layer.size || [0, 0];
-
-        const px = x - ox;
-        const py = y - oy;
-
-        if (px >= pos[0] && px < pos[0] + size[0]
-            && py >= pos[1] && py < pos[1] + size[1]) {
-            if (layer.owner) targets.push({
-                target: layer.owner,
-                x: ox,
-                y: oy,
-            });
-            doSublayers = true;
-        } else if (!layer.clipContents) doSublayers = true;
-
-        if (doSublayers) {
-            for (const sublayer of layer.sublayers) {
-                this.#getNodesAtPointInner(x, y, ox + pos[0], oy + pos[1], sublayer, targets);
-            }
-        }
-    };
-
-    getTargetsAtPoint = (x, y) => {
-        const stackTop = this.windows[this.windows.length - 1];
-        if (!stackTop) return [];
-        const targets = [];
-        this.#getNodesAtPointInner(x, y, 0, 0, stackTop.layer, targets);
-        return targets;
-    };
-    getNodesAtPoint = (x, y) => {
-        return this.getTargetsAtPoint(x, y).map(({ target }) => target);
     };
 
     dragPointer = pointer => {
@@ -271,7 +215,7 @@ export class ViewRoot {
     set width (value) {
         this.node.style.width = value + 'px';
         this.svgNode.setAttribute('width', value);
-        this.updateRootSizes();
+        this.layout();
     }
     get height () {
         return +this.svgNode.getAttribute('height') | 0;
@@ -279,27 +223,7 @@ export class ViewRoot {
     set height (value) {
         this.node.style.height = value + 'px';
         this.svgNode.setAttribute('height', value);
-        this.updateRootSizes();
-    }
-
-    /// Pushes a window.
-    pushWindow (view) {
-        this.windows.push(view);
-        this.svgNode.appendChild(view.layer.node);
-        view.layer.didMount(this.ctx);
-        view.didAttach(this.ctx);
-        view.didMount(null);
-
-        this.updateRootSizes();
-    }
-    popWindow () {
-        const view = this.windows.pop();
-        if (!view) return;
-        this.svgNode.removeChild(view.layer.node);
-        if (!view.parent) {
-            view.didUnmount();
-            view.didDetach();
-        }
+        this.layout();
     }
 
     ctxPushWindow = view => {
@@ -312,7 +236,7 @@ export class ViewRoot {
         };
     };
 
-    updateRootSizes () {
+    layout () {
         for (const item of this.windows) {
             if (!item.wantsRootSize) continue;
             if (item.size[0] === this.width && item.size[1] === this.height) continue;
@@ -320,85 +244,4 @@ export class ViewRoot {
             item.needsLayout = true;
         }
     }
-
-    // animation loop handling
-    animationLoopId = 0;
-    animationLoop = false;
-    emptyCycles = 0;
-
-    scheduledLayout = new Set();
-    scheduleLayout = (view) => {
-        if (this._currentLayoutSet && !this._currentLayoutSet.has(view)) {
-            // we got a layout schedule request while currently in layout;
-            // batch this view for the current run as well, if possible
-            this._currentLayoutSet.add(view);
-            return;
-        }
-        this.scheduledLayout.add(view);
-        this.startLoop(true);
-    };
-
-    scheduledDisplay = new Set();
-    scheduleDisplay = (layer) => {
-        this.scheduledDisplay.add(layer);
-        this.startLoop();
-    };
-
-    scheduledLayoutCommits = new Set();
-    scheduleCommitAfterLayout = (transaction) => {
-        this.scheduledLayoutCommits.add(transaction);
-        this.startLoop(true);
-    };
-
-    /// Starts the animation loop.
-    startLoop (defer) {
-        if (this.animationLoop) return;
-        this.animationLoop = true;
-        const id = ++this.animationLoopId;
-        this.emptyCycles = 0;
-        if (defer) requestAnimationFrame(() => this.loop(id));
-        else this.loop(id);
-    }
-
-    /// Animation loop.
-    loop = id => {
-        if (id !== this.animationLoopId) return;
-        if (this.animationLoop) requestAnimationFrame(() => this.loop(id));
-
-        let didAThing = false;
-
-        const scheduledLayout = new Set(this.scheduledLayout);
-        this._currentLayoutSet = scheduledLayout;
-        this.scheduledLayout.clear();
-        for (const item of scheduledLayout) {
-            didAThing = true;
-            try {
-                item.layoutIfNeeded();
-            } catch (err) {
-                console.error(err);
-            }
-        }
-        delete this._currentLayoutSet;
-
-        for (const transaction of this.scheduledLayoutCommits) {
-            transaction.commit();
-        }
-        this.scheduledLayoutCommits.clear();
-
-        const scheduledDisplay = new Set(this.scheduledDisplay);
-        this.scheduledDisplay.clear();
-        for (const item of scheduledDisplay) {
-            didAThing = true;
-            try {
-                item.draw();
-            } catch (err) {
-                console.error(err);
-            }
-        }
-
-        if (!didAThing) this.emptyCycles++;
-        else this.emptyCycles = 0;
-
-        if (this.emptyCycles > 12) this.animationLoop = false;
-    };
 }

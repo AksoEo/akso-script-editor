@@ -207,7 +207,7 @@ export function fromRawDefs (defs, ctx) {
     return output;
 }
 
-function fromRawExpr (expr, resolveExpr, ctx) {
+export function fromRawExpr (expr, resolveExpr, ctx) {
     if (expr.t === 'u') {
         return { ctx, type: 'u' };
     } else if (expr.t === 'b') {
@@ -292,7 +292,7 @@ function stringifyRef (expr, makeAux) {
     else return makeAux(toRawExpr(expr, makeAux));
 }
 
-function toRawExpr (expr, makeAux) {
+export function toRawExpr (expr, makeAux) {
     if (!expr) return { t: 'u' };
     if (expr.type === 'r') {
         // we can't call directly in case it's a function, so we pass it through id
@@ -537,6 +537,7 @@ export function evalExpr (expr) {
     if (!def) return; // no def?
 
     const defs = def.parent;
+    if (!defs) return; // no defs
     const rawDefs = toRawDefs(defs);
 
     const rawExpr = toRawExpr(expr, def => {

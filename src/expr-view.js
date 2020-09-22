@@ -1,6 +1,6 @@
 import { View, TextLayer, PathLayer, Transaction, Gesture } from './ui';
 import { getProtoView } from './proto-pool';
-import { evalExpr } from './model';
+import { remove as removeNode, evalExpr } from './model';
 import { Dropdown } from './dropdown';
 import { Tooltip } from './tooltip';
 import { editMatrix, MatrixPreview } from './matrix';
@@ -18,6 +18,9 @@ export class ExprSlot extends View {
     spec = null;
     // model ctx
     exprCtx = null;
+
+    // if true, will mark this slot as only accepting refs
+    #refOnly = false;
 
     constructor (onInsertExpr, exprCtx) {
         super();
@@ -54,8 +57,35 @@ export class ExprSlot extends View {
         if (this.#exprUI) this.addSubview(this.#exprUI);
     }
 
+    get refOnly () {
+        return this.#refOnly;
+    }
+    set refOnly (v) {
+        if (v === this.#refOnly) return;
+        this.#refOnly = v;
+        if (this.#refOnly) {
+            if (this.expr && this.expr.type !== 'r') {
+                // remove current expr because it's not a ref!
+                removeNode(this.expr);
+                this.expr = null;
+            }
+            this.refOnlyLayer = new PathLayer();
+            this.refOnlyLayer.path = config.icons.ref;
+            this.addSublayer(this.refOnlyLayer);
+        } else {
+            this.removeSublayer(this.refOnlyLayer);
+            this.refOnlyLayer = null;
+        }
+        this.needsLayout = true;
+    }
+
     get isEmpty () {
         return this.exprUI || !this.expr;
+    }
+
+    acceptsExpr (expr) {
+        if (this.refOnly) return expr.type === 'r';
+        return true;
     }
 
     insertExpr (expr) {
@@ -83,7 +113,7 @@ export class ExprSlot extends View {
         let exprUI = null;
 
         if (this.spec) {
-            if (this.spec.type === 'enum') {
+            if (this.spec.type === 'enum' && !this.refOnly) {
                 const variants = Object.keys(this.spec.variants);
 
                 if (!this.expr) {
@@ -114,7 +144,13 @@ export class ExprSlot extends View {
             }
             this.exprUI.hasTentativeChild = this.tentativeChild;
             this.exprUI.layoutIfNeeded();
-            exprSize = this.exprUI.size;
+            exprSize = this.exprUI.size.slice();
+            if (this.refOnlyLayer) {
+                this.exprUI.position = [config.primitives.paddingX + config.icons.size, 0];
+                exprSize[0] += this.exprUI.position[0];
+            } else {
+                this.exprUI.position = [0, 0];
+            }
         } else if (this.expr) {
             if (this.exprUI) {
                 if (this.exprUI.drop) this.exprUI.drop();
@@ -134,7 +170,12 @@ export class ExprSlot extends View {
             exprSize[1] = Math.max(exprSize[1], exprView.size[1]);
         }
 
-        if (this.tentativeChild) {
+        let acceptsChild = true;
+        if (this.refOnly && this.tentativeChild) {
+            acceptsChild = this.tentativeChild.expr.type === 'r';
+        }
+
+        if (this.tentativeChild && acceptsChild) {
             this.layer.stroke = config.exprSlot.hoverStroke;
             this.layer.strokeWidth = config.exprSlot.hoverWeight;
             this.layer.background = config.exprSlot.hoverBackground;
@@ -144,6 +185,16 @@ export class ExprSlot extends View {
             this.layer.background = config.exprSlot.background;
         }
         this.layer.size = exprSize;
+
+        if (this.refOnlyLayer) {
+            this.refOnlyLayer.fill = this.expr
+                ? config.primitives.iconColor0
+                : config.primitives.refOnlyColor;
+            this.refOnlyLayer.position = [
+                config.primitives.paddingX,
+                (this.layer.size[1] - config.icons.size) / 2,
+            ];
+        }
     }
 }
 
@@ -609,6 +660,7 @@ const EXPR_VIEW_IMPLS = {
         },
         deinit () {
             delete this.slots;
+            delete this.label;
         },
         layout () {
             const itemCount = this.expr.items.length;
@@ -629,9 +681,12 @@ const EXPR_VIEW_IMPLS = {
             let width = config.primitives.paddingX;
             let height = 0;
 
+            const refOnly = this.expr.parent && this.expr.parent.flatExpr;
+
             for (let i = 0; i < this.slots.length; i++) {
                 const slot = this.slots[i];
                 const expr = this.expr.items[i];
+                slot.refOnly = refOnly;
                 slot.expr = expr;
                 this.exprCtx = this.expr.ctx;
                 slot.dragController = this.dragController;
@@ -750,6 +805,8 @@ const EXPR_VIEW_IMPLS = {
 
             let height = nameSize[1] + trueNameSize[1];
 
+            const refOnly = this.expr.parent && this.expr.parent.flatExpr;
+
             for (let i = 0; i < this.argSlots.length; i++) {
                 const arg = this.expr.args[i] || null;
                 const slot = this.argSlots[i];
@@ -757,6 +814,7 @@ const EXPR_VIEW_IMPLS = {
 
                 label.text = params[i];
 
+                slot.refOnly = refOnly;
                 slot.expr = arg;
                 slot.exprCtx = this.expr.ctx;
                 slot.spec = slots[i];
@@ -1007,8 +1065,10 @@ class SwitchMatch extends View {
     layout () {
         super.layout();
 
-        this.cond.exprCtx = this.expr.ctx;
-        this.value.exprCtx = this.expr.ctx;
+        const refOnly = this.expr.parent && this.expr.parent.flatExpr;
+
+        this.cond.refOnly = this.value.refOnly = refOnly;
+        this.cond.exprCtx = this.value.exprCtx = this.expr.ctx;
         this.cond.expr = this.match.cond;
         this.value.expr = this.match.value;
 
