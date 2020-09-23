@@ -39,9 +39,21 @@ export class CanvasView extends View {
     setRawExprMode (onClose) {
         this.isInRawExprMode = true;
         this.defsView.setRawExprMode(onClose);
+        this.rawExprRoot = fromRawDefs({}, this.modelCtx);
     }
     setRawRootExpr (expr) {
-        this.defsView.rawExprView.expr = fromRawExpr(expr, () => null, this.modelCtx);
+        const key = 'key';
+        this.rawExprRoot = fromRawDefs({ [key]: expr }, this.modelCtx);
+        let keyDef;
+        for (const def of this.rawExprRoot.defs) {
+            if (def.name === key) {
+                keyDef = def;
+                break;
+            }
+        }
+        if (!keyDef) return; // ???
+        this.defsView.rawExprView.expr = keyDef.expr;
+        this.resolveRefs(true);
     }
     getRawRootExpr () {
         const expr = this.defsView.rawExprView.expr;
@@ -158,14 +170,18 @@ export class CanvasView extends View {
     /// Loads a raw asc root node.
     setRawRoot (data) {
         this.root = fromRawDefs(data, this.modelCtx);
-        this.resolveRefs();
+        this.resolveRefs(true);
     }
     getRawRoot () {
         return toRawDefs(this.root);
     }
 
-    resolveRefs () {
-        resolveRefs(this.root);
+    resolveRefs (reducing) {
+        if (this.isInRawExprMode) {
+            resolveRefs(this.rawExprRoot, reducing);
+        } else {
+            resolveRefs(this.root, reducing);
+        }
         this.needsLayout = true;
     }
 }

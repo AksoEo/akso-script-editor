@@ -2,14 +2,14 @@ import { Window, ViewRoot, RenderViewRoot } from './ui';
 import { EditorView } from './editor-view';
 import { CodeEditor } from './code-editor';
 import { TextInput } from './text-input';
-import { lex } from './asct/lex';
-import { parse } from './asct/parse';
-import { write } from './asct/write';
-import { ExprSlot, ExprView } from './expr-view';
-
-export { RenderViewRoot, ExprSlot, ExprView };
-export { lex, parse, write };
+export { lex } from './asct/lex';
+export { parse } from './asct/parse';
+export { write } from './asct/write';
+export { DefsView } from './defs-view';
+export { ExprSlot, ExprView } from './expr-view';
 export * as model from './model';
+
+export { Window, RenderViewRoot };
 
 /// An AKSO Script editor.
 export default class Editor {

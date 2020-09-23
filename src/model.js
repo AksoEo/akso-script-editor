@@ -418,6 +418,7 @@ export function makeStdRefs () {
 
             refs.set(name, {
                 type: 'ds',
+                name,
                 isStdlib: true,
                 nameOverride,
                 expr: {
@@ -436,7 +437,7 @@ export function makeStdRefs () {
 const FORM_VAR = Symbol('form var'); // form var ref sentinel value
 
 /// Resolves refs in defs.
-export function resolveRefs (defs, parentScope) {
+export function resolveRefs (defs, reducing = false, parentScope) {
     const ctx = defs.ctx;
 
     if (!parentScope) {
@@ -455,7 +456,7 @@ export function resolveRefs (defs, parentScope) {
 
     for (const def of defs.defs) {
         const refs = new Set();
-        resolveRefsInExpr(def.expr, defIndex, refs);
+        resolveRefsInExpr(def.expr, reducing, defIndex, refs);
 
         def.references = refs;
         def.referencedBy = new Set();
@@ -469,7 +470,7 @@ export function resolveRefs (defs, parentScope) {
 
     for (const expr of defs.floatingExpr) {
         const refs = new Set();
-        resolveRefsInExpr(expr, defIndex, refs);
+        resolveRefsInExpr(expr, reducing, defIndex, refs);
 
         expr.references = refs;
 
@@ -490,7 +491,7 @@ export function resolveRefs (defs, parentScope) {
 }
 
 /// Resolves refs in the given expression, recursively
-function resolveRefsInExpr (expr, defs, refs, _srcOverride = null) {
+function resolveRefsInExpr (expr, reducing, defs, refs, _srcOverride = null) {
     if (!expr) return;
     if (expr.type === 'r') {
         // this is a ref!
@@ -505,21 +506,33 @@ function resolveRefsInExpr (expr, defs, refs, _srcOverride = null) {
         }
     } else if (expr.type === 'l') {
         for (const item of expr.items) {
-            resolveRefsInExpr(item, defs, refs);
+            resolveRefsInExpr(item, reducing, defs, refs);
         }
     } else if (expr.type === 'c') {
-        resolveRefsInExpr(expr.func, defs, refs, expr);
+        resolveRefsInExpr(expr.func, reducing, defs, refs, expr);
         for (const arg of expr.args) {
-            resolveRefsInExpr(arg, defs, refs);
+            resolveRefsInExpr(arg, reducing, defs, refs);
+        }
+
+        if (reducing && expr.func.refNode && expr.func.refNode.isStdlib && expr.func.refNode.name === 'id') {
+            // identity function!
+            if (expr.args.length === 1) {
+                // if there's just one argument id doesn't actually do anything
+                const inner = expr.args[0];
+                expr.args = null;
+                const exprParent = expr.parent;
+                Object.assign(expr, inner);
+                expr.parent = exprParent;
+            }
         }
     } else if (expr.type === 'f') {
         const bodyScope = new Map(defs);
         for (const param of expr.params) bodyScope.set(param, { t: 'fp', name: param });
-        resolveRefs(expr.body, bodyScope);
+        resolveRefs(expr.body, reducing, bodyScope);
     } else if (expr.type === 'w') {
         for (const m of expr.matches) {
-            resolveRefsInExpr(m.cond, defs, refs);
-            resolveRefsInExpr(m.value, defs, refs);
+            resolveRefsInExpr(m.cond, reducing, defs, refs);
+            resolveRefsInExpr(m.value, reducing, defs, refs);
         }
     }
 }
@@ -531,6 +544,7 @@ export function evalExpr (expr) {
         if (def.type === 'ds') {
             break;
         }
+        if (def.parent === def) throw new Error('cycle');
         def = def.parent;
     }
 
