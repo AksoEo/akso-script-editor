@@ -8,12 +8,16 @@ export class Toolbar extends View {
         this.layer.background = config.toolbar.background;
 
         this.buttons = [
-            new Button('Select', () => {}),
-            new Button('MathExpr', () => {}),
-            new Button('Help', () => {}),
-            new Button('Graph', this.toggleGraphView),
-            new Button('Code', this.toggleCodeView),
+            new Button(config.toolbar.buttons.code, this.toggleCodeView),
+            new Button(config.toolbar.buttons.graph, this.toggleGraphView),
+            new Button(config.toolbar.buttons.help, () => {}),
         ];
+
+        this.fileButtons = [
+            new Button(config.toolbar.buttons.save, this.save, true),
+        ];
+
+        for (const b of this.buttons) this.addSubview(b);
     }
 
     toggleGraphView = (graphButton) => {
@@ -36,6 +40,8 @@ export class Toolbar extends View {
         }
     };
 
+    save = () => this.editor.onSave();
+
     layout () {
         super.layout();
 
@@ -45,22 +51,37 @@ export class Toolbar extends View {
             b.position = [x, (this.size[1] - b.size[1]) / 2];
             x += b.size[0] + 8;
         }
+
+        x = this.size[0] - 16;
+        for (const b of this.fileButtons) {
+            b.layoutIfNeeded();
+            x -= b.size[0];
+            b.position = [x, (this.size[1] - b.size[1]) / 2];
+            x -= 8;
+        }
     }
 
     *iterSubviews () {
-        for (const b of this.buttons) yield b;
+        if (!this.editor || !this.editor.onSave) return;
+        for (const b of this.fileButtons) {
+            yield b;
+        }
     }
 }
 
 class Button extends View {
-    constructor (label, onClick) {
+    constructor (label, onClick, primary) {
         super();
+        this.isPrimary = primary;
         this.layer.cornerRadius = config.cornerRadius;
         this.layer.strokeWidth = config.toolbar.button.outlineWidth;
         this.onClick = onClick;
         this.label = new TextLayer();
         this.label.text = label;
         this.label.font = config.identFont;
+        this.label.color = this.isPrimary
+            ? config.toolbar.button.pcolor
+            : config.toolbar.button.color;
         this.needsLayout = true;
 
         Gesture.onTap(this, () => this.onClick(this), this.onTapStart, this.onTapEnd);
@@ -80,12 +101,16 @@ class Button extends View {
 
         const { paddingX, paddingY } = config.toolbar.button;
 
+        const p = id => this.isPrimary
+            ? config.toolbar.button['p' + id]
+            : config.toolbar.button[id];
+
         this.layer.stroke = this.active
-            ? config.toolbar.button.activeOutline
-            : this.hovering ? config.toolbar.button.hoverOutline : config.toolbar.button.outline;
+            ? p('activeOutline')
+            : this.hovering ? p('hoverOutline') : p('outline');
         this.layer.background = this.pressed
-            ? config.toolbar.button.activeBackground
-            : config.toolbar.button.background;
+            ? p('activeBackground')
+            : p('background');
 
         const labelSize = this.label.getNaturalSize();
         this.layer.size = [
@@ -102,19 +127,19 @@ class Button extends View {
         t.commit();
     }
     onPointerExit () {
-        const t = new Transaction(1, 0.1);
+        const t = new Transaction(1, 0.3);
         this.hovering = false;
         this.layout();
         t.commit();
     }
     onTapStart = () => {
-        const t = new Transaction(0, 0);
+        const t = new Transaction(1, 0.1);
         this.pressed = true;
         this.layout();
         t.commit();
     };
     onTapEnd = () => {
-        const t = new Transaction(1, 0.3);
+        const t = new Transaction(1, 0.4);
         this.pressed = false;
         this.layout();
         t.commit();

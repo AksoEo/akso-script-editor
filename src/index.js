@@ -58,8 +58,15 @@ export default class Editor {
         return this.editor.getRawRoot();
     }
 
-    loadInRawExprMode (expr, onClose) {
-        this.editor.setRawExpr(expr, onClose);
+    get onSave () {
+        return this.editor.onSave;
+    }
+    set onSave (f) {
+        this.editor.onSave = f;
+    }
+
+    loadInRawExprMode (expr, options) {
+        this.editor.setRawExpr(expr, options);
     }
 
     saveRawExpr () {

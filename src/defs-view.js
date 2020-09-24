@@ -35,13 +35,17 @@ export class DefsView extends View {
         Gesture.onScroll(this, this.onScroll);
     }
 
-    setRawExprMode (onClose) {
-        this.layer.background = [0, 0, 0, 0];
+    setRawExprMode (options) {
+        this.isInRawExprMode = true;
+        this.layer.background = [0, 0, 0, 0.2];
         this.addDefView = null;
         this.rawExprView = new StandaloneExprView(this.defs.ctx, this.dragController);
         this.scrollAnchor.addSubview(this.rawExprView);
 
-        Gesture.onTap(this, onClose);
+        if (options.onClose) Gesture.onTap(this, options.onClose);
+        if (options.location) {
+            this.rawExprScreenSpaceLocation = options.location;
+        }
 
         this.flushSubviews();
     }
@@ -156,7 +160,21 @@ export class DefsView extends View {
             itemView.layout();
         }
 
-        if (this.useGraphView) {
+        if (this.isInRawExprMode) {
+            this.rawExprView.layoutIfNeeded();
+            if (this.rawExprScreenSpaceLocation) {
+                const ssl = this.rawExprScreenSpaceLocation;
+                const ownLocation = this.layer.absolutePosition;
+                const pos = [ssl[0] - ownLocation[0], ssl[1] - ownLocation[1]];
+
+                pos[0] = Math.max(0, pos[0]);
+                pos[1] = Math.max(0, pos[1]);
+                pos[0] = Math.min(pos[0], this.size[0] - this.rawExprView.size[0]);
+                pos[1] = Math.min(pos[1], this.size[1] - this.rawExprView.size[1]);
+
+                this.scrollAnchor.position = pos;
+            }
+        } else if (this.useGraphView) {
             this.scrollAnchor.position = [-this.scroll[0], -this.scroll[1]];
             this.performGraphLayout();
 
@@ -495,8 +513,10 @@ export class DefView extends View {
     }
 
     cachedValue = undefined;
-    cachedError = true;
+    cachedLoading = true;
+    cachedError = false;
     updateValue () {
+        this.cachedLoading = false;
         this.cachedError = false;
         // do we want a preview value?
         const result = evalExpr(this.def.expr);
@@ -664,6 +684,7 @@ export class DefView extends View {
         this.exprSlot.dragController = this.dragController;
         this.exprSlot.layoutIfNeeded();
 
+        this.valueView.loading = this.cachedLoading;
         this.valueView.value = this.cachedValue;
         this.valueView.error = this.cachedError;
         this.valueView.hidden = !this.cachedError && this.cachedValue === undefined;

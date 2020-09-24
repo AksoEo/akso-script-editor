@@ -538,7 +538,7 @@ function resolveRefsInExpr (expr, reducing, defs, refs, _srcOverride = null) {
 }
 
 export function evalExpr (expr) {
-    if (!expr.parent) return;
+    if (!expr || !expr.parent) return;
     let def = expr;
     while (def) {
         if (def.type === 'ds') {

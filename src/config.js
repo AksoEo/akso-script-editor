@@ -175,12 +175,27 @@ export default {
         button: {
             background: [0.8, 0.8, 0.8, 1],
             activeBackground: [0.5, 0.5, 0.5, 1],
+            color: [0, 0, 0, 1],
             outlineWidth: 2,
             outline: [1, 1, 1, 0],
             hoverOutline: [1, 1, 1, 1],
             activeOutline: [0, 0, 0, 1],
             paddingX: 7,
             paddingY: 3,
+
+            pbackground: [0.2, 0.2, 0.2, 1],
+            pactiveBackground: [0, 0, 0, 1],
+            pcolor: [1, 1, 1, 1],
+            poutline: [0, 0.76, 0.9, 0],
+            phoverOutline: [0, 0.76, 0.9, 1],
+            pactiveOutline: [0.1, 0.9, 1, 1],
+        },
+        buttons: {
+            code: 'Code',
+            graph: 'Graph',
+            help: 'Help',
+
+            save: 'Save',
         },
     },
 

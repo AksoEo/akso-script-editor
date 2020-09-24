@@ -3,11 +3,14 @@ import { View, Layer, PathLayer, Transaction } from './ui';
 import { ExprView } from './expr-view';
 import config from './config';
 
+// TODO: add loading indicator
+
 /// Renders a runtime value.
 ///
 /// # Properties
 /// - value: the value to render
 /// - error: if true, will show an error icon instead
+/// - loading: if true, will show a loading indicator instead
 export class ValueView extends View {
     constructor () {
         super();

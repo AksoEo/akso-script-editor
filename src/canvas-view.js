@@ -36,9 +36,9 @@ export class CanvasView extends View {
     }
 
     isInRawExprMode = false;
-    setRawExprMode (onClose) {
+    setRawExprMode (options) {
         this.isInRawExprMode = true;
-        this.defsView.setRawExprMode(onClose);
+        this.defsView.setRawExprMode(options);
         this.rawExprRoot = fromRawDefs({}, this.modelCtx);
     }
     setRawRootExpr (expr) {
