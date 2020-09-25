@@ -25,8 +25,9 @@ export function createContext () {
     const mutationListeners = [];
     const startMutListeners = [];
     const flushListeners = [];
+    const extMutationListeners = [];
     const fvMutationListeners = [];
-    return {
+    const ctx = {
         onMutation: listener => mutationListeners.push(listener),
         notifyMutation: node => {
             for (const listener of mutationListeners) {
@@ -37,10 +38,32 @@ export function createContext () {
                 }
             }
         },
+        externalDefs: [],
+        externalRefs: new Set(), // all exprs that reference external defs
+        _prevExternalRefs: new Set(),
+        onExternalDefsMutation: listener => extMutationListeners.push(listener),
+        notifyExternalDefsMutation: () => {
+            ctx.startMutation();
+            for (const ref of ctx.externalRefs) ctx.notifyMutation(ref.source);
+            // we also need to notify anything that isn't an ext ref anymore
+            for (const ref of ctx._prevExternalRefs) ctx.notifyMutation(ref.source);
+            ctx._prevExternalRefs = ctx.externalRefs;
+            ctx.flushMutation();
+            for (const listener of extMutationListeners) {
+                try {
+                    listener();
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        },
         formVars: [],
         formVarRefs: new Set(), // all exprs that reference form vars
         onFormVarsMutation: listener => fvMutationListeners.push(listener),
         notifyFormVarsMutation: () => {
+            ctx.startMutation();
+            for (const ref of ctx.formVarRefs) ctx.notifyMutation(ref.source);
+            ctx.flushMutation();
             for (const listener of fvMutationListeners) {
                 try {
                     listener();
@@ -70,6 +93,7 @@ export function createContext () {
             }
         },
     };
+    return ctx;
 }
 
 export function makeRef (name, ctx) {
@@ -453,6 +477,16 @@ export function resolveRefs (defs, reducing = false, parentScope) {
     }
 
     const reverseRefs = new Map();
+    const externalDefs = new Set();
+
+    for (const defs of ctx.externalDefs) {
+        for (const def in defs) {
+            if (typeof def !== 'string' || def.startsWith('_')) continue;
+            const defObj = { ctx, isExternal: true };
+            defIndex.set(def, defObj);
+            externalDefs.add(defObj);
+        }
+    }
 
     for (const def of defs.defs) {
         const refs = new Set();
@@ -479,6 +513,13 @@ export function resolveRefs (defs, reducing = false, parentScope) {
             if (!reverseRefs.has(target)) reverseRefs.set(target, new Set());
             reverseRefs.get(target).add({ def: null, source: expr, name });
         }
+    }
+
+    // find all references to external defs
+    ctx.externalRefs = new Set();
+    for (const def of externalDefs) {
+        const refs = reverseRefs.get(def);
+        if (refs) for (const ref of refs) ctx.externalRefs.add(ref);
     }
 
     // single out refs to special FORM_VAR value
@@ -519,6 +560,7 @@ function resolveRefsInExpr (expr, reducing, defs, refs, _srcOverride = null) {
             if (expr.args.length === 1) {
                 // if there's just one argument id doesn't actually do anything
                 const inner = expr.args[0];
+                expr.func = null;
                 expr.args = null;
                 const exprParent = expr.parent;
                 Object.assign(expr, inner);
@@ -566,7 +608,7 @@ export function evalExpr (expr) {
 
     let result = undefined;
     try {
-        result = evaluate(rawDefs, out, id => {
+        result = evaluate(expr.ctx.externalDefs.concat([rawDefs]), out, id => {
             for (const fv of expr.ctx.formVars) {
                 if (fv.name === id) {
                     return fv.value;
@@ -585,7 +627,7 @@ export function evalExpr (expr) {
 
     let analysis = null;
     try {
-        analysis = analyze(rawDefs, out, id => {
+        analysis = analyze(expr.ctx.externalDefs.concat(rawDefs), out, id => {
             for (const fv of expr.ctx.formVars) {
                 if (fv.name === id) {
                     if (fv.type === 'u') return NULL;

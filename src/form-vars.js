@@ -5,8 +5,11 @@ import { getProtoView } from './proto-pool';
 import { Dropdown } from './dropdown';
 import config from './config';
 
+// TODO: what if there's a form var but no view for it?
+
 /// Initializes the form vars tab in the library.
 export function initFormVarsTab (lib, tab) {
+    const items = new WeakMap(); // name -> formVar
     const addFormVar = new AddFormVar(() => {
         // add item before the add button
         const item = new FormVarItem(lib);
@@ -18,18 +21,34 @@ export function initFormVarsTab (lib, tab) {
             t.commit();
             item.layer.draw(); // fix graphical glitch by drawing immediately
         }
+        items.set(item.var, item);
 
         tab.itemList.items.splice(tab.itemList.items.length - 2, 0, item);
         const t = new Transaction(1, 0.3);
         tab.itemList.needsLayout = true;
         t.commitAfterLayout(tab.itemList.ctx);
     });
-    tab.itemList.items.push(addFormVar);
-    tab.itemList.items.push(new BottomPaddingView());
+    const bottomPadding = new BottomPaddingView();
+    tab.itemList.items.push(addFormVar, bottomPadding);
+
+    return {
+        update: () => {
+            tab.itemList.items = [];
+            for (const varItem of lib.ctx.modelCtx.formVars) {
+                if (!items.has(varItem)) {
+                    const item = new FormVarItem(lib, varItem);
+                    items.set(varItem, item);
+                }
+                tab.itemList.items.push(items.get(varItem));
+            }
+            tab.itemList.items.push(addFormVar, bottomPadding);
+            tab.itemList.needsLayout = true;
+        },
+    };
 }
 
 class FormVarItem extends View {
-    constructor (lib) {
+    constructor (lib, _var) {
         super();
         this.lib = lib;
         this.needsLayout = true;
@@ -38,14 +57,17 @@ class FormVarItem extends View {
 
         this.modelCtx = createContext();
 
-        this.var = {
-            name: config.formVars.defaultName(Math.random().toString(36).substr(2)),
-            type: 'u',
-            value: null,
-
-            // for the form var expr view
-            ctx: this.modelCtx,
-        };
+        if (!_var) {
+            _var = {
+                name: config.formVars.defaultName(Math.random().toString(36).substr(2)),
+                type: 'u',
+                value: null,
+            };
+        } else {
+            this.unownedVariable = true;
+        }
+        this.var = _var;
+        this.var.ctx = this.modelCtx; // for the form var expr view
 
         this.modelCtx.onMutation(this.onMutation);
 
@@ -124,13 +146,16 @@ class FormVarItem extends View {
 
     didAttach (ctx) {
         super.didAttach(ctx);
-        this.ctx.modelCtx.formVars.push(this.var);
+        if (!this.ctx.modelCtx.formVars.includes(this.var)) {
+            this.ctx.modelCtx.formVars.push(this.var);
+        }
     }
 
     onRename = name => {
         name = name.replace(/^@+/, ''); // strip leading @ signs
         const t = new Transaction(1, 0.3);
-        const replaceName = '@' + this.var.name;
+        const oldName = this.var.name;
+        const replaceName = '@' + oldName;
         this.var.name = name;
         const newName = '@' + this.var.name;
 
@@ -149,18 +174,6 @@ class FormVarItem extends View {
             ref.source.ctx.notifyMutation(ref.source);
         }
 
-        setTimeout(() => {
-            // a bit hacky: wait for refs to update
-            // refs have now updated; do we have any new ones?
-            for (const ref of this.ctx.modelCtx.formVarRefs) {
-                if (ref.name !== newName) continue;
-                if (!refSources.has(ref.source)) {
-                    // they need updating too
-                    ref.source.ctx.notifyMutation(ref.source);
-                }
-            }
-        }, 10);
-
         this.ctx.modelCtx.notifyFormVarsMutation();
         this.needsLayout = true;
         t.commitAfterLayout(this.ctx);
@@ -173,8 +186,10 @@ class FormVarItem extends View {
 
     willDetach () {
         super.willDetach();
-        const idx = this.ctx.modelCtx.formVars.indexOf(this.var);
-        if (idx !== -1) this.ctx.modelCtx.formVars.splice(idx, 1);
+        if (!this.unownedVariable) {
+            const idx = this.ctx.modelCtx.formVars.indexOf(this.var);
+            if (idx !== -1) this.ctx.modelCtx.formVars.splice(idx, 1);
+        }
     }
     onRemove = () => {
         const t = new Transaction(1, 0.3);

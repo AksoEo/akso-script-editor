@@ -50,6 +50,11 @@ export class Library extends View {
         this.flushSubviews();
     }
 
+    setRawExprMode () {
+        // this is most probably the tab you want to use in this mode
+        if (this.selected !== 'references') this.toggleSelected('references');
+    }
+
     selected = null;
     pseudoSelected = null;
 
@@ -109,15 +114,40 @@ export class Library extends View {
             tab.itemList.needsLayout = true;
         } else if (tab.id === 'formVars') {
             tab.itemList.items = [];
-            initFormVarsTab(this, tab);
+            this.formVarsTab = initFormVarsTab(this, tab);
             tab.itemList.needsLayout = true;
         }
     }
     updateTab (tab) {
         if (tab.id === 'references') {
+            if (!tab.itemList._byExtDef) tab.itemList._byExtDef = new WeakMap();
             if (!tab.itemList._byDef) tab.itemList._byDef = new WeakMap();
+            const byExtDef = tab.itemList._byExtDef;
             const byDef = tab.itemList._byDef;
             tab.itemList.items = [];
+
+            for (const script of this.defs.defs.ctx.externalDefs) {
+                for (const name in script) {
+                    const def = script[name];
+                    if (!byExtDef.has(def)) byExtDef.set(def, {});
+                    const state = byExtDef.get(def);
+
+                    if (name !== state.name) {
+                        state.name = name;
+                        if (!state.refExpr) {
+                            state.refExpr = new ExprFactory(this, ctx => ({ ctx, type: 'r', name }));
+                        } else {
+                            state.refExpr.update(ctx => ({ ctx, type: 'r', name }));
+                        }
+                    }
+
+                    // TODO: isCallable? arity? function calls
+
+                    if (state.refExpr) tab.itemList.items.push(state.refExpr);
+                }
+            }
+
+            // TODO: defs from previous scripts (use section headers)
             for (const def of this.defs.defs.defs) {
                 if (!byDef.has(def)) byDef.set(def, {});
                 const state = byDef.get(def);
@@ -169,6 +199,8 @@ export class Library extends View {
             }
 
             tab.itemList.needsLayout = true;
+        } else if (tab.id === 'formVars') {
+            this.formVarsTab.update();
         }
     }
 

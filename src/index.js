@@ -7,6 +7,7 @@ export { parse } from './asct/parse';
 export { write } from './asct/write';
 export { DefsView } from './defs-view';
 export { ExprSlot, ExprView } from './expr-view';
+export { viewPool, getProtoView } from './proto-pool';
 export * as model from './model';
 
 export { Window, RenderViewRoot };
@@ -48,6 +49,14 @@ export default class Editor {
     }
     set height (value) {
         this.root.height = value;
+    }
+
+    /// defs: array of ASC scripts
+    loadExternalDefs (defs) {
+        this.editor.setRawExternalDefs(defs);
+    }
+    setFormVars (vars) {
+        this.editor.setFormVars(vars);
     }
 
     load (data) {

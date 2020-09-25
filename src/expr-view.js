@@ -531,7 +531,7 @@ const EXPR_VIEW_IMPLS = {
             this.ctx.beginInput(
                 this.layer.absolutePosition,
                 this.size,
-                this.expr.value.toString(),
+                (this.expr.value || 0).toString(),
                 { font: config.identFont },
             ).then(value => {
                 this.expr.value = Number.parseFloat(value, 10);
@@ -543,7 +543,7 @@ const EXPR_VIEW_IMPLS = {
             });
         },
         layout () {
-            this.textLayer.text = this.expr.value.toString();
+            this.textLayer.text = (this.expr.value || 0).toString();
 
             const iconSize = config.icons.size;
             this.iconLayer.position = [4, 4];

@@ -45,6 +45,13 @@ export class EditorView extends View {
         return this.canvasView.getRawRoot();
     }
 
+    setRawExternalDefs (defs) {
+        this.canvasView.setRawExternalDefs(defs);
+    }
+    setFormVars (vars) {
+        this.canvasView.setFormVars(vars);
+    }
+
     /// Loads a raw asc root node for raw expr mode.
     /// This mode can be entered but cannot be left!!
     /// In this mode, the only thing being edited is this expression.

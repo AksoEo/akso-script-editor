@@ -25,6 +25,7 @@ export class CanvasView extends View {
         this.modelCtx.onMutation(this.#onMutation);
         this.modelCtx.onStartMutation(this.#onStartMutation);
         this.modelCtx.onFlushMutation(this.#onFlushMutation);
+        this.modelCtx.onExternalDefsMutation(this.#onExternalDefsMutation);
         this.modelCtx.onFormVarsMutation(this.#onFormVarsMutation);
         this.root = fromRawDefs({}, this.modelCtx);
         this.defsView = new DefsView(this.root);
@@ -38,6 +39,7 @@ export class CanvasView extends View {
     isInRawExprMode = false;
     setRawExprMode (options) {
         this.isInRawExprMode = true;
+        this.library.setRawExprMode(options);
         this.defsView.setRawExprMode(options);
         this.rawExprRoot = fromRawDefs({}, this.modelCtx);
     }
@@ -75,6 +77,10 @@ export class CanvasView extends View {
         this.defsView.needsValueUpdate = true;
         this.defsView.needsLayout = true;
         this.resolveRefs();
+    };
+    #onExternalDefsMutation = () => {
+        this.defsView.needsValueUpdate = true;
+        this.defsView.needsLayout = true;
     };
     #onFormVarsMutation = () => {
         this.defsView.needsValueUpdate = true;
@@ -174,6 +180,15 @@ export class CanvasView extends View {
     }
     getRawRoot () {
         return toRawDefs(this.root);
+    }
+
+    setRawExternalDefs (defs) {
+        this.modelCtx.externalDefs = defs;
+        this.resolveRefs(true);
+    }
+    setFormVars (vars) {
+        this.modelCtx.formVars = vars;
+        this.modelCtx.notifyFormVarsMutation();
     }
 
     resolveRefs (reducing) {
