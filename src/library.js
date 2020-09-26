@@ -128,6 +128,7 @@ export class Library extends View {
 
             for (const script of this.defs.defs.ctx.externalDefs) {
                 for (const name in script) {
+                    if (typeof name !== 'string' || name.startsWith('_')) continue;
                     const def = script[name];
                     if (!byExtDef.has(def)) byExtDef.set(def, {});
                     const state = byExtDef.get(def);
