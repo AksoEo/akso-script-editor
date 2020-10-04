@@ -84,7 +84,6 @@ class FormVarItem extends View {
         this.typeSelection = new Dropdown();
         this.typeSelection.expr = { value: this.var.type, ctx: this.modelCtx };
         this.typeSelection.spec = { variants: config.formVars.types };
-        this.addSubview(this.typeSelection);
 
         this.exprView = new ExprView(this.var);
         this.addSubview(this.exprView);
@@ -214,7 +213,11 @@ class FormVarItem extends View {
         this.var.type = type;
         this.var.value = newValue;
         this.needsLayout = true;
-    };
+    }
+
+    *iterSubviews () {
+        if (this.var.type !== 'timestamp') yield this.typeSelection;
+    }
 
     layout () {
         // reset constructor stuff
@@ -249,9 +252,13 @@ class FormVarItem extends View {
         );
 
         const line2Top = line1BottomY + 8;
-        this.typeSelection.position = [8, line2Top];
+        let line2X = 8;
+        if (this.var.type !== 'timestamp') {
+            this.typeSelection.position = [line2X, line2Top];
+            line2X += this.typeSelection.size[0] + 8;
+        }
         this.exprView.position = [
-            8 + this.typeSelection.size[0] + 8,
+            line2X,
             line2Top,
         ];
         const line2Bottom = line2Top + Math.max(this.typeSelection.size[1], this.exprView.size[1]);

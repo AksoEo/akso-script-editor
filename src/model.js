@@ -1,4 +1,4 @@
-import { evaluate, analyze, NULL, BOOL, NUMBER, STRING, TypeVar, array } from '@tejo/akso-script';
+import { evaluate, analyze, NULL, BOOL, NUMBER, STRING, TypeVar, array, Timestamp } from '@tejo/akso-script';
 import { infixIdentRegexF } from './asct/shared';
 import config from './config';
 
@@ -635,6 +635,7 @@ export function evalExpr (expr) {
                     if (fv.type === 'n') return NUMBER;
                     if (fv.type === 's') return STRING;
                     if (fv.type === 'm') return array(new TypeVar());
+                    if (fv.type === 'timestamp') return Timestamp;
                 }
             }
         });

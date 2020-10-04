@@ -76,7 +76,7 @@ export class ValueView extends View {
         else if (Array.isArray(value)) e = { type: 'm', value };
         else if (value instanceof VMFun) e = { type: 'f', params: value.params, body: [] };
         // TODO: these
-        else if (value instanceof Date) e = { type: 's', value: `(TODO: date fmt) ${value}` };
+        else if (value instanceof Date) e = { type: 'timestamp', value };
         else if (value === undefined) {
             // probably an error
             e = { type: 'u' };

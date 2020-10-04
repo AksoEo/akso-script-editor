@@ -1,3 +1,4 @@
+import { stdlib } from '@tejo/akso-script';
 import { View, TextLayer, PathLayer, Transaction, Gesture } from './ui';
 import { getProtoView } from './proto-pool';
 import { remove as removeNode, evalExpr } from './model';
@@ -970,6 +971,40 @@ const EXPR_VIEW_IMPLS = {
             yield this.cases;
         },
     },
+    timestamp: {
+        // view only!
+        init () {
+            this.layer.cornerRadius = config.cornerRadius;
+            this.layer.background = config.primitives.timestamp;
+            this.layer.stroke = config.primitives.timestampOutline;
+            this.layer.strokeWidth = config.primitives.outlineWeight;
+            this.textLayer = new TextLayer();
+            this.textLayer.font = config.identFont;
+            this.textLayer.color = config.primitives.color;
+
+            this.iconLayer = new PathLayer();
+            this.iconLayer.path = config.icons.timestamp;
+            this.iconLayer.fill = config.primitives.iconColor;
+        },
+        deinit () {
+            delete this.textLayer;
+            delete this.iconLayer;
+        },
+        layout () {
+            this.textLayer.text = stdlib.ts_fmt.apply(null, [this.expr.value]);
+
+            const iconSize = config.icons.size;
+            this.iconLayer.position = [4, 4];
+
+            const textSize = this.textLayer.getNaturalSize();
+            this.layer.size = [textSize[0] + iconSize + 4 + config.primitives.paddingX * 2, textSize[1] + config.primitives.paddingYS * 2];
+            this.textLayer.position = [4 + iconSize + 4, this.layer.size[1] / 2];
+        },
+        *iterSublayers () {
+            yield this.textLayer;
+            yield this.iconLayer;
+        },
+    }
 };
 
 class SwitchCases extends View {
