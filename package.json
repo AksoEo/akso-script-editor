@@ -4,6 +4,7 @@
   "description": "",
   "main": "dist/asce.esm.js",
   "module": "dist/asce.esm.js",
+  "sideEffects": false,
   "author": "",
   "license": "ISC",
   "scripts": {
