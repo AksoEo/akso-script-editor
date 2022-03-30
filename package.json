@@ -1,6 +1,6 @@
 {
   "name": "@tejo/akso-script-editor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "",
   "main": "dist/asce.esm.js",
   "module": "dist/asce.esm.js",
@@ -24,7 +24,7 @@
   "dependencies": {
     "@babel/preset-react": "^7.9.4",
     "@tejo/akso-script": "^0.2.2",
-    "codemirror": "^5.53.2",
+    "codemirror": "^5.65.2",
     "dagre": "^0.8.5",
     "pointer-tracker": "^2.3.0",
     "preact": "^10.4.1"
