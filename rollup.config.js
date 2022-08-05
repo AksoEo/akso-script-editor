@@ -1,19 +1,27 @@
-import babel from 'rollup-plugin-babel';
+import typescript from '@rollup/plugin-typescript';
+import babel from '@rollup/plugin-babel';
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import postcss from 'rollup-plugin-postcss';
+import alias from '@rollup/plugin-alias';
 import { eslint } from 'rollup-plugin-eslint';
 
 const inputOptions = {
-    input: 'src/index.js',
+    input: 'src/index.ts',
     plugins: [
         postcss(),
+        alias({
+            entries: [
+                { find: '@tejo/akso-script', replacement: '@tejo/akso-script/dist-esm' },
+            ],
+        }),
         eslint({
             throwOnError: true,
             include: ['src/**'],
             useEslintrc: false,
-            parser: 'babel-eslint',
+            parser: '@typescript-eslint/parser',
             envs: ['browser', 'node', 'es6'],
+            plugins: ['@typescript-eslint'],
             rules: {
                 'no-unused-vars': 'warn',
                 'semi': 'warn',
@@ -26,10 +34,8 @@ const inputOptions = {
                 'no-const-assign': 'error',
             },
         }),
+        typescript(),
         babel({
-            presets: [
-                ['@babel/preset-react', { pragma: 'h' }]
-            ],
             plugins: ['@babel/plugin-proposal-class-properties'],
             exclude: ['node_modules/**'],
         }),

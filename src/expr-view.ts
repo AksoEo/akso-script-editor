@@ -1,29 +1,43 @@
 import { stdlib } from '@tejo/akso-script';
 import { View, TextLayer, PathLayer, Transaction, Gesture } from './ui';
 import { getProtoView } from './proto-pool';
-import { remove as removeNode, evalExpr } from './model';
+import { remove as removeNode, evalExpr, AscContext, Expr, ExprSlotSpec, Def } from './model';
 import { Dropdown } from './dropdown';
 import { Tooltip } from './tooltip';
 import { editMatrix, MatrixPreview } from './matrix';
 import { ValueView } from './value-view';
+import { DragController, DragSlot, IExprDragController } from './drag-controller';
 import config from './config';
+import { BaseLayer } from './ui/layer/base';
+
+type OnInsertExpr = (expr: Expr.Any) => void;
+
+interface ExprUI {
+    drop?: () => void;
+    hasTentativeChild: View | null;
+}
 
 /// Renders a slot for an expression, or UI if this field has a spec.
-export class ExprSlot extends View {
+export class ExprSlot extends View implements DragSlot {
     // currently contained expr
-    #expr = null;
+    #expr: Expr.Any | null = null;
     // currently contained expr UI
-    #exprUI = null;
+    #exprUI: (View & ExprUI) | null = null;
     wantsChildLayout = true;
     // field spec
-    spec = null;
+    spec: ExprSlotSpec | null = null;
     // model ctx
-    exprCtx = null;
+    exprCtx: AscContext | null = null;
 
     // if true, will mark this slot as only accepting refs
     #refOnly = false;
+    refOnlyLayer: PathLayer | null = null;
 
-    constructor (onInsertExpr, exprCtx) {
+    tentativeChild: View | null = null;
+    onInsertExpr: OnInsertExpr;
+    dragController: DragController | null = null;
+
+    constructor (onInsertExpr: OnInsertExpr, exprCtx: AscContext | null) {
         super();
 
         this.layer.cornerRadius = config.cornerRadius;
@@ -34,13 +48,13 @@ export class ExprSlot extends View {
 
     didUnmount () {
         super.didUnmount();
-        this.dragController.unregisterTarget(this);
+        this.dragController?.unregisterTarget(this);
     }
 
-    get expr () {
+    get expr (): Expr.Any | null {
         return this.#expr;
     }
-    set expr (value) {
+    set expr (value: Expr.Any | null) {
         if (this.#expr === value) return;
         if (this.#expr) this.removeSubview(getProtoView(this.#expr, ExprView));
         this.#expr = value;
@@ -48,17 +62,17 @@ export class ExprSlot extends View {
         if (this.#expr) this.addSubview(getProtoView(this.#expr, ExprView));
     }
 
-    get exprUI () {
+    get exprUI (): (View & ExprUI) | null {
         return this.#exprUI;
     }
-    set exprUI (value) {
+    set exprUI (value: (View & ExprUI) | null) {
         if (this.#exprUI === value) return;
         if (this.#exprUI) this.removeSubview(this.#exprUI);
         this.#exprUI = value;
         if (this.#exprUI) this.addSubview(this.#exprUI);
     }
 
-    get refOnly () {
+    get refOnly (): boolean {
         return this.#refOnly;
     }
     set refOnly (v) {
@@ -81,7 +95,7 @@ export class ExprSlot extends View {
     }
 
     get isEmpty () {
-        return this.exprUI || !this.expr;
+        return !!this.exprUI || !this.expr;
     }
 
     acceptsExpr (expr) {
@@ -89,12 +103,12 @@ export class ExprSlot extends View {
         return true;
     }
 
-    insertExpr (expr) {
+    insertExpr (expr: Expr.Any) {
         this.tentativeChild = null;
         this.onInsertExpr(expr);
     }
 
-    beginTentative (view) {
+    beginTentative (view: View) {
         this.tentativeChild = view;
         this.needsLayout = true;
     }
@@ -106,12 +120,12 @@ export class ExprSlot extends View {
     layout () {
         super.layout();
 
-        if (this.dragController) this.dragController.registerTarget(this);
+        this.dragController?.registerTarget(this);
 
         let exprSize = [56, 24];
 
         let useUIExpr = false;
-        let exprUI = null;
+        let exprUIConstructor: { new(expr: Expr.Any, spec: ExprSlotSpec): View & ExprUI } | null = null;
 
         if (this.spec) {
             if (this.spec.type === 'enum' && !this.refOnly) {
@@ -120,6 +134,7 @@ export class ExprSlot extends View {
                 if (!this.expr) {
                     this.onInsertExpr({
                         ctx: this.exprCtx,
+                        parent: null,
                         type: 's',
                         value: variants[0],
                     });
@@ -128,20 +143,20 @@ export class ExprSlot extends View {
 
                 if (this.expr && this.expr.type === 's' && variants.includes(this.expr.value)) {
                     useUIExpr = true;
-                    exprUI = Dropdown;
+                    exprUIConstructor = Dropdown;
                 }
             } else if (this.spec.type === 'switchcond') {
                 if (!this.expr) {
                     useUIExpr = true;
-                    exprUI = SwitchCondNone;
+                    exprUIConstructor = SwitchCondNone;
                 }
             }
         }
 
         if (useUIExpr) {
-            if (!this.exprUI || this.exprUI.constructor !== exprUI) {
+            if (!this.exprUI || this.exprUI.constructor !== exprUIConstructor) {
                 if (this.exprUI && this.exprUI.drop) this.exprUI.drop();
-                this.exprUI = new exprUI(this.expr, this.spec);
+                this.exprUI = new (exprUIConstructor!)(this.expr, this.spec);
             }
             this.exprUI.hasTentativeChild = this.tentativeChild;
             this.exprUI.layoutIfNeeded();
@@ -172,7 +187,7 @@ export class ExprSlot extends View {
         }
 
         let acceptsChild = true;
-        if (this.refOnly && this.tentativeChild) {
+        if (this.refOnly && this.tentativeChild instanceof ExprView) {
             acceptsChild = this.tentativeChild.expr.type === 'r';
         }
 
@@ -203,6 +218,8 @@ export class ExprSlot extends View {
 class PeekView extends View {
     #value = null;
     analysis = { valid: false, type: null };
+    tooltip: Tooltip;
+    inner: ValueView;
 
     constructor () {
         super();
@@ -246,8 +263,27 @@ class PeekView extends View {
 /// Renders a single expression.
 export class ExprView extends View {
     wantsChildLayout = true;
+    expr: Expr.Any;
+    impl$tapAction: (() => void) | null = null;
+    impl$init: (() => void) | null = null;
+    impl$deinit: (() => void) | null = null;
+    impl$layout: (() => void) | null = null;
+    impl$onDragStart: (() => void) | null = null;
+    impl$onPointerEnter: ((event) => void) | null = null;
+    impl$onPointerMove: ((event) => void) | null = null;
+    impl$onPointerExit: ((event) => void) | null = null;
+    impl$iterSubviews: (() => Generator<View>) | null = null;
+    impl$iterSublayers: (() => Generator<BaseLayer>) | null = null;
+    implType: string;
+    implProto: ExprImpl;
+    noInteraction = false;
+    decorationOnly = false;
+    dragController: IExprDragController | null = null;
 
-    constructor (expr) {
+    isDef?: boolean;
+    onDefRename?: ((name: string) => void);
+
+    constructor (expr: Expr.Any) {
         super();
         this.expr = expr;
         this.updateImpl();
@@ -269,8 +305,10 @@ export class ExprView extends View {
 
         this.implProto = impl;
         this.implType = this.expr.type;
-        for (const k in impl) {
-            this[`impl$${k}`] = impl[k];
+        for (const k in this) {
+            if (k.startsWith('impl$')) {
+                this[k] = impl[k.substr(5)] || null;
+            }
         }
         if (this.impl$init) this.impl$init();
         this.needsLayout = true;
@@ -282,11 +320,9 @@ export class ExprView extends View {
         this.impl$layout();
     }
 
-    #dragStartPos = [0, 0];
     #dragging = false;
     onDragStart = ({ absX, absY }) => {
         if (this.noInteraction || !this.dragController) return;
-        this.#dragStartPos = [absX, absY];
         this.decorationOnly = true;
         this.dragController.beginExprDrag(this.expr, absX, absY);
         if (this.impl$onDragStart) this.impl$onDragStart();
@@ -327,11 +363,23 @@ export class ExprView extends View {
     }
 }
 
+interface ExprImpl {
+    init?();
+    deinit?();
+    tapAction?();
+    layout?();
+    onPointerEnter?();
+    onPointerExit?();
+    onDragStart?();
+    iterSubviews?(): Generator<View>;
+    iterSublayers?(): Generator<BaseLayer>;
+}
+
 function getImplForExpr (expr) {
     return EXPR_VIEW_IMPLS[expr.type];
 }
 
-const EXPR_VIEW_IMPLS = {
+const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
     r: {
         init () {
             this.layer.cornerRadius = config.cornerRadius;
@@ -535,7 +583,7 @@ const EXPR_VIEW_IMPLS = {
                 (this.expr.value || 0).toString(),
                 { font: config.identFont },
             ).then(value => {
-                this.expr.value = Number.parseFloat(value, 10);
+                this.expr.value = Number.parseFloat(value);
                 if (!Number.isFinite(this.expr.value)) {
                     this.expr.value = 0;
                 }
@@ -672,10 +720,10 @@ const EXPR_VIEW_IMPLS = {
                 this.slots.push(new ExprSlot(expr => {
                     this.expr.items[index] = expr;
                     expr.parent = this.expr;
-                    this.ctx.startMutation();
-                    this.ctx.notifyMutation(this);
-                    this.ctx.notifyMutation(this.expr);
-                    this.ctx.flushMutation();
+                    this.ctx.modelCtx.startMutation();
+                    this.ctx.modelCtx.notifyMutation(this);
+                    this.ctx.modelCtx.notifyMutation(this.expr);
+                    this.ctx.modelCtx.flushMutation();
                 }, this.expr.ctx));
             }
 
@@ -1004,17 +1052,21 @@ const EXPR_VIEW_IMPLS = {
             yield this.textLayer;
             yield this.iconLayer;
         },
-    }
+    },
 };
 
 class SwitchCases extends View {
-    constructor (exprView) {
+    exprView: ExprView;
+    matchViews: SwitchMatch[];
+    dragController: DragController | null = null;
+
+    constructor (exprView: ExprView) {
         super();
         this.exprView = exprView;
         this.matchViews = [];
     }
-    get expr () {
-        return this.exprView.expr;
+    get expr (): Expr.Switch {
+        return this.exprView.expr as Expr.Switch;
     }
     layout () {
         super.layout();
@@ -1071,7 +1123,15 @@ class SwitchCases extends View {
 }
 
 class SwitchMatch extends View {
-    constructor (expr, match) {
+    expr: Expr.Switch;
+    match: Expr.Switch.Case;
+    ifLabel: TextLayer;
+    thenLabel: TextLayer;
+    cond: ExprSlot;
+    value: ExprSlot;
+    dragController: DragController | null = null;
+
+    constructor (expr: Expr.Switch, match: Expr.Switch.Case) {
         super();
         this.expr = expr;
         this.match = match;
@@ -1100,7 +1160,7 @@ class SwitchMatch extends View {
     layout () {
         super.layout();
 
-        const refOnly = this.expr.parent && this.expr.parent.flatExpr;
+        const refOnly = this.expr.parent && (this.expr.parent as Def).flatExpr;
 
         this.cond.refOnly = this.value.refOnly = refOnly;
         this.cond.exprCtx = this.value.exprCtx = this.expr.ctx;
@@ -1147,6 +1207,8 @@ class SwitchMatch extends View {
 }
 
 class SwitchCondNone extends View {
+    label: TextLayer;
+    hasTentativeChild: View | null = null;
     constructor () {
         super();
         this.label = new TextLayer();

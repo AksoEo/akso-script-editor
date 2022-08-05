@@ -1,4 +1,7 @@
 import { Layer } from './layer';
+import { Gesture } from './gesture';
+import { BaseLayer } from './layer/base';
+import { ViewContext } from './context';
 
 /// A UI view.
 ///
@@ -7,21 +10,21 @@ export class View {
     layer = new Layer(this);
 
     /// Gesture recognizers.
-    gestures = new Set();
+    gestures = new Set<Gesture>();
 
     /// Set this to true to have your own needsLayout set to true when a child updates.
     wantsChildLayout = false;
 
     /// Current context.
-    ctx = null;
+    ctx: ViewContext | null = null;
 
     /// Parent view.
-    #parent = null;
+    #parent: View | null = null;
 
     /// List of sublayers.
-    #sublayers = [];
+    #sublayers: BaseLayer[] = [];
     /// List of subviews.
-    #subviews = [];
+    #subviews: View[] = [];
 
     /// Returns a list of sublayers. Please do not mutate this list.
     get sublayers () {
@@ -91,7 +94,8 @@ export class View {
         }
     }
 
-    addSubview (view) {
+    addSubview (view: View) {
+        if (!view) throw new Error('missing view argument');
         if (this.#subviews.includes(view)) return;
         if (view.parent) {
             console.warn('View is still mounted somewhere', 'self, other parent, subview:', this, view.parent, view);
@@ -163,8 +167,8 @@ export class View {
         return this.#cachedSubviews;
     }
 
-    *iterSublayers () {}
-    *iterSubviews () {}
+    *iterSublayers (): Generator<BaseLayer> {}
+    *iterSubviews (): Generator<View> {}
 
     flushSubviews () {
         this.#cachedSublayers = null;
@@ -172,10 +176,10 @@ export class View {
         this.layer.needsDisplay = true;
     }
 
-    getGesturesForType (...args) {
+    getGesturesForType (type: Gesture.Type, pointerType: Gesture.PointerType) {
         const gestures = [];
         for (const g of this.gestures) {
-            const handler = g.getHandlerForType(...args);
+            const handler = g.getHandlerForType(type, pointerType);
             if (handler) gestures.push(handler);
         }
         return gestures;

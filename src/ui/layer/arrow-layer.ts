@@ -9,6 +9,7 @@ export class ArrowLayer extends BaseLayer {
     #stroke = new LayerProperty([0, 0, 0, 1]);
     #strokeWidth = new LayerProperty([1]);
     #arrowSize = new LayerProperty([0]);
+    node: SVGPathElement;
 
     constructor () {
         super();

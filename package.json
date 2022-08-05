@@ -8,25 +8,30 @@
   "author": "",
   "license": "ISC",
   "scripts": {
-    "prepare": "rollup -c"
+    "prepare": "rollup -c",
+    "watch": "rollup -c --watch"
   },
   "devDependencies": {
     "@babel/core": "^7.9.0",
     "@babel/plugin-proposal-class-properties": "^7.8.3",
+    "@rollup/plugin-alias": "^3.1.9",
+    "@rollup/plugin-babel": "^5.3.1",
     "@rollup/plugin-commonjs": "^11.0.2",
+    "@rollup/plugin-eslint": "^8.0.2",
     "@rollup/plugin-node-resolve": "^7.1.1",
+    "@rollup/plugin-typescript": "^8.3.4",
+    "@typescript-eslint/eslint-plugin": "^5.32.0",
+    "@typescript-eslint/parser": "^5.32.0",
     "babel-eslint": "^10.1.0",
-    "rollup": "^1.32.1",
-    "rollup-plugin-babel": "^4.4.0",
+    "rollup": "^2.77.2",
     "rollup-plugin-eslint": "^7.0.0",
-    "rollup-plugin-postcss": "^3.1.1"
+    "rollup-plugin-postcss": "^4.0.2",
+    "tslib": "^2.4.0"
   },
   "dependencies": {
-    "@babel/preset-react": "^7.9.4",
-    "@tejo/akso-script": "^0.2.2",
+    "@tejo/akso-script": "^0.2.4",
     "codemirror": "^5.65.2",
     "dagre": "^0.8.5",
-    "pointer-tracker": "^2.3.0",
-    "preact": "^10.4.1"
+    "pointer-tracker": "^2.3.0"
   }
 }

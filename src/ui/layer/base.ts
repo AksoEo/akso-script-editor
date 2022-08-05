@@ -2,7 +2,7 @@ import { SpringSolver } from '../../spring';
 
 export const svgNS = 'http://www.w3.org/2000/svg';
 
-export const USE_WAAPI = !!document.timeline && window.Animation;
+export const USE_WAAPI = !!(document.timeline && window.Animation);
 
 /// Converts a float[4] to a css color string (rgba).
 export function vec2rgb(vec) {
@@ -24,7 +24,7 @@ export function getTransaction () {
 
 
 /// Base layer class. Handles display scheduling and such.
-export class BaseLayer {
+export abstract class BaseLayer {
     #needsDisplay = false;
 
     /// Rendering context
@@ -63,6 +63,8 @@ export class BaseLayer {
     get sublayers () {
         return new Set();
     }
+
+    abstract draw();
 }
 
 const PROP_UPDATE_THRESHOLD = 1e-4;
@@ -82,6 +84,8 @@ export class LayerProperty {
 
     hasPending = false;
     pendingValue = null;
+
+    spring: SpringSolver;
 
     constructor (initial) {
         this.spring = new SpringSolver(1, 1, initial.length || 1);
@@ -221,6 +225,8 @@ export class LayerProperty {
 /// An animation transaction.
 export class Transaction {
     properties = [];
+    damping: number;
+    period: number;
 
     constructor (damping = 1, period = 1) {
         this.damping = damping;

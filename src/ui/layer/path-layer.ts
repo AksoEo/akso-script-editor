@@ -8,6 +8,8 @@ export class PathLayer extends BaseLayer {
     #stroke = new LayerProperty([0, 0, 0, 0]);
     #strokeWidth = new LayerProperty([0]);
 
+    node: SVGPathElement;
+
     constructor () {
         super();
         this.node = document.createElementNS(svgNS, 'path');

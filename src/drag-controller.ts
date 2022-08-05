@@ -1,30 +1,49 @@
 import { View, Window, Transaction } from './ui';
 import { getProtoView } from './proto-pool';
-import { DefView, Trash } from './defs-view';
-import { ExprView } from './expr-view';
-import { remove as removeNode } from './model';
+import { DefsView, DefView, Trash } from './defs-view';
+import { ExprSlot, ExprView } from './expr-view';
+import { AnyNode, Def, Expr, remove as removeNode } from './model';
+import { PushedWindow } from './ui/context';
 
-export class DragController {
+export interface DragSlot {
+    isEmpty?: boolean;
+    acceptsExpr?: (node: AnyNode) => boolean;
+    acceptsDef?: boolean;
+}
+
+export interface IExprDragController {
+    beginExprDrag(expr: Expr.Any, x: number, y: number);
+    moveExprDrag(x: number, y: number);
+    endExprDrag();
+    cancelExprDrag();
+}
+
+export class DragController implements IExprDragController {
     #draggingNode = null;
     #dragOffset = [0, 0];
     #removal = null;
     #currentSlot = null;
     #onlyY = false;
     #onlyYXPos = null;
-    targets = new Set();
+    targets = new Set<DragSlot>();
+    defs: DefsView;
+    worldHandle: PushedWindow | null = null;
 
-    constructor (defs) {
+    constructor (defs: DefsView) {
         this.defs = defs;
     }
 
-    beginDefDrag (def, x, y) {
+    beginDefDrag (def: Def, x: number, y: number) {
         this.defs.showTrash = true;
         this.#removal = null;
         this.#draggingNode = def;
         this.#currentSlot = null;
         const defView = getProtoView(def, DefView);
+        this.#onlyYXPos = defView.absolutePosition[0];
+
         if (!this.defs.useGraphView) {
             this.#removal = removeNode(def);
+            defView.parent.removeSubview(defView);
             // FIXME: don't do this
             const win = new Window();
             const winRoot = new View();
@@ -32,9 +51,9 @@ export class DragController {
             win.addSubview(winRoot);
             this.worldHandle = this.defs.ctx.push(win);
         }
+
         defView._isBeingDragged = true;
         this.#onlyY = !defView.usingGraphView;
-        this.#onlyYXPos = defView.absolutePosition[0];
         if (this.defs.useGraphView) {
             this.#dragOffset = [
                 defView.position[0] - x,
@@ -52,11 +71,11 @@ export class DragController {
             y + this.#dragOffset[1],
         ];
         t.commit();
-        const transaction = new Transaction(1, 0.3);
+        const transaction = new Transaction(1, this.defs.useGraphView ? 0.3 : 0);
         this.defs.putTentative(defView.position[1] + this.defs.offset[1], defView.size[1]);
         transaction.commitAfterLayout(this.defs.ctx);
     }
-    moveDefDrag (x, y) {
+    moveDefDrag (x: number, y: number) {
         this.moveDrag(x, y, DefView, slot => slot.acceptsDef);
         const defView = getProtoView(this.#draggingNode, DefView);
         this.defs.putTentative(defView.position[1] + this.defs.offset[1], defView.size[1]);
@@ -89,7 +108,7 @@ export class DragController {
         });
     }
 
-    beginExprDrag (expr, x, y) {
+    beginExprDrag (expr: Expr.Any, x: number, y: number) {
         this.#removal = null;
         this.#draggingNode = expr;
         this.#currentSlot = null;
@@ -114,7 +133,7 @@ export class DragController {
             }
 
             // set parent in hovering-over state
-            const parentView = exprView.parent;
+            const parentView = exprView.parent as ExprSlot;
             if (parentView.beginTentative) {
                 parentView.beginTentative(exprView);
                 this.#currentSlot = parentView;
@@ -126,7 +145,7 @@ export class DragController {
             exprView.position[1] - y,
         ];
     }
-    moveExprDrag (x, y) {
+    moveExprDrag (x: number, y: number) {
         this.moveDrag(x, y, ExprView, slot => !slot.acceptsExpr || slot.acceptsExpr(this.#draggingNode));
     }
     endExprDrag () {
@@ -148,7 +167,7 @@ export class DragController {
             this.#removal = null;
         }
     }
-    moveDrag (x, y, TypeClass, condition = (() => true)) {
+    moveDrag (x: number, y: number, TypeClass, condition: ((v: DragSlot) => boolean) = (() => true)) {
         if (!this.#draggingNode) return;
 
         const slot = this.getProspectiveSlot(x, y, condition);
@@ -204,7 +223,7 @@ export class DragController {
 
         this.defs.needsLayout = true;
     }
-    endDrag (TypeClass, commit) {
+    endDrag (TypeClass, commit: () => void) {
         if (this.#currentSlot) {
             {
                 // move expr view into slot coordinate system
@@ -227,23 +246,25 @@ export class DragController {
         this.defs.needsLayout = true;
     }
 
-    getProspectiveSlot (x, y, condition) {
-        const slots = this.defs.ctx.nodesAtPoint(x, y);
+    getProspectiveSlot (x: number, y: number, condition: (s: DragSlot) => boolean) {
+        const slots = this.defs.ctx.nodesAtPoint(x, y, true);
 
         // find the last non-empty slot (last because it’ll be on top)
         for (let i = slots.length - 1; i >= 0; i--) {
-            if (slots[i] === this.#draggingNode) continue;
-            if (slots[i].isEmpty && condition(slots[i])) {
-                return slots[i];
+            const slot = slots[i] as DragSlot;
+            if (!this.targets.has(slot)) continue;
+            if (slot === this.#draggingNode) continue;
+            if (slot.isEmpty && condition(slot)) {
+                return slot;
             }
         }
         return null;
     }
 
-    registerTarget (target) {
+    registerTarget (target: DragSlot) {
         this.targets.add(target);
     }
-    unregisterTarget (target) {
+    unregisterTarget (target: DragSlot) {
         this.targets.delete(target);
     }
 }

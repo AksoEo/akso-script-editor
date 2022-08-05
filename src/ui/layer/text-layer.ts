@@ -12,6 +12,8 @@ export class TextLayer extends BaseLayer {
     #baseline = 'middle';
     #position = new LayerProperty([0, 0]);
 
+    node: SVGTextElement;
+
     constructor () {
         super();
         this.node = document.createElementNS(svgNS, 'text');

@@ -1,13 +1,21 @@
 import { VMFun } from '@tejo/akso-script';
-import { View, Layer, TextLayer, Transaction, Gesture } from './ui';
+import { Gesture, Layer, TextLayer, Transaction, View } from './ui';
 import { ExprFactory } from './expr-factory';
-import { makeStdRefs, evalExpr } from './model';
+import { evalExpr, Expr, makeStdRefs } from './model';
 import { Scrollbar } from './scrollbar';
 import { initFormVarsTab } from './form-vars';
+import { DefsView } from './defs-view';
 import config from './config';
 
 /// This is the library of objects on the left-hand side.
 export class Library extends View {
+    defs: DefsView;
+    layer: Layer;
+    sideTabs: SideTabs;
+    tabs: { [k: string]: { id: string, view: Scrollable, itemList: ItemList } };
+    onRequestLinearView: (() => void) | null = null;
+    formVarsTab: { update(): void };
+
     constructor (defs) {
         super();
 
@@ -167,10 +175,19 @@ export class Library extends View {
                 {
                     // check if it's a function
                     const ctx = this.defs.defs.ctx;
-                    const refExpr = { ctx, type: 'r', name };
-                    const tmpDef = { ctx, type: 'ds', name: '__vmRefTemp', expr: refExpr };
-                    tmpDef.parent = this.defs.defs;
-                    refExpr.parent = tmpDef;
+                    const refExpr: Expr.Ref = {
+                        ctx,
+                        parent: null,
+                        type: 'r',
+                        name,
+                    };
+                    refExpr.parent = {
+                        ctx,
+                        parent: this.defs.defs,
+                        type: 'ds',
+                        name: '__vmRefTemp',
+                        expr: refExpr,
+                    };
 
                     const evr = evalExpr(refExpr);
                     isCallable = evr && evr.result instanceof VMFun;
@@ -178,13 +195,21 @@ export class Library extends View {
 
                 if (isCallable) {
                     const makeFn = (ctx, isDemo) => {
-                        const expr = {
+                        const funcRef: Expr.Ref = {
                             ctx,
+                            parent: null,
+                            type: 'r',
+                            name,
+                        };
+                        const expr: Expr.Call = {
+                            ctx,
+                            parent: null,
                             type: 'c',
-                            func: { ctx, type: 'r', name },
+                            func: funcRef,
                             args: [],
                         };
-                        if (isDemo) expr.func.refNode = def;
+                        funcRef.parent = expr;
+                        if (isDemo) funcRef.refNode = def;
                         return expr;
                     };
 
@@ -239,11 +264,21 @@ export class Library extends View {
     }
 }
 
+type SideTabsOptions = { [k: string]: { title: string } };
+type SideTabLayer = {
+    id: string,
+    bg: Layer,
+    labelContainer: Layer,
+    label: TextLayer,
+};
 class SideTabs extends View {
     selected = null;
     height = 0;
+    options: SideTabsOptions;
+    onSelect: (item: string) => void;
+    tabLayers: SideTabLayer[];
 
-    constructor (options, onSelect) {
+    constructor (options: SideTabsOptions, onSelect: (item: string) => void) {
         super();
         this.options = options;
         this.onSelect = onSelect;
@@ -329,6 +364,8 @@ class SideTabs extends View {
 }
 
 class SectionHeader extends View {
+    labelLayer: TextLayer;
+
     constructor (label) {
         super();
 
@@ -347,7 +384,10 @@ class SectionHeader extends View {
 }
 
 class Scrollable extends View {
-    constructor (contents) {
+    contents: View;
+    scrollbar: Scrollbar;
+
+    constructor (contents: View) {
         super();
         this.contents = contents;
         this.layer.clipContents = true;
@@ -372,7 +412,8 @@ class Scrollable extends View {
     layout () {
         super.layout();
 
-        this.contents.parentWidth = this.size[0];
+        // FIXME: some better way of doing this...
+        (this.contents as any).parentWidth = this.size[0];
         this.contents.layoutIfNeeded();
 
         const scrollMin = 0;
@@ -386,7 +427,8 @@ class Scrollable extends View {
         this.scrollbar.scroll = this.scroll;
         this.scrollbar.layout();
 
-        this.contents.visibleBoundsY = [this.scroll, this.scroll + this.size[1]];
+        // FIXME: ditto
+        (this.contents as any).visibleBoundsY = [this.scroll, this.scroll + this.size[1]];
         this.contents.position = [0, -this.scroll];
         this.contents.flushSubviews();
     }
@@ -404,6 +446,8 @@ class Scrollable extends View {
 
 class ItemList extends View {
     wantsChildLayout = true;
+    parentWidth = 0;
+    visibleBoundsY: [number, number] | null = null;
 
     items = [];
 

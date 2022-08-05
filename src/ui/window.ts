@@ -4,7 +4,7 @@ export class Window extends View {
     wantsRootSize = true;
 
     /// A list of portals.
-    portals = [];
+    portals: View[] = [];
 
     layout () {
         super.layout();
@@ -14,11 +14,11 @@ export class Window extends View {
         }
     }
 
-    addPortal (view) {
+    addPortal (view: View) {
         this.portals.push(view);
         this.addSubview(view);
     }
-    removePortal (view) {
+    removePortal (view: View) {
         const index = this.portals.indexOf(view);
         if (index !== -1) {
             this.portals.splice(index, 1);

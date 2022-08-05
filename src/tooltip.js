@@ -95,7 +95,7 @@ export class Tooltip extends View {
         this.lastTime = Date.now();
         this.time += Math.max(1 / 244, Math.min(deltaTime, 1 / 30));
 
-        if (!this.ctx.window) {
+        if (!this.ctx || !this.ctx.window) {
             this.innerView.layer.opacity = 0;
             return;
         }

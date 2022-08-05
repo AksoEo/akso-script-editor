@@ -1,14 +1,7 @@
+
 /// An abstract gesture recognizer.
-export class Gesture {
-    static Type = {
-        POINTER: 'pointer',
-        SCROLL: 'scroll',
-    };
-    static PointerType = {
-        MOUSE: 'mouse',
-        PEN: 'pen',
-        TOUCH: 'touch',
-    };
+export abstract class Gesture {
+    abstract type: string;
 
     /// Event priority negotiation:
     /// Only gesture recognizers with the highest priority level will continue receiving pointer
@@ -25,9 +18,7 @@ export class Gesture {
     ///
     /// - type: Gesture.Types
     /// - pointerType: nullable Gesture.PointerType
-    getHandlerForType (type, pointerType) {
-        void type, pointerType;
-    }
+    abstract getHandlerForType (type: Gesture.Type, pointerType: Gesture.PointerType);
 
     listeners = {};
     on (event, handler) {
@@ -49,7 +40,7 @@ export class Gesture {
     }
 
     /// Adds a raw pointer capture handler.
-    static rawPointerCapture (view, onPointerStart, onPointerDrag, onPointerEnd, onPointerCancel) {
+    static rawPointerCapture (view, onPointerStart?, onPointerDrag?, onPointerEnd?, onPointerCancel?) {
         const gesture = new RawPointerCaptureGesture();
         if (onPointerStart) gesture.on('pointerstart', onPointerStart);
         if (onPointerDrag) gesture.on('pointerdrag', onPointerDrag);
@@ -59,7 +50,7 @@ export class Gesture {
     }
 
     /// Adds a tap gesture handler.
-    static onTap (view, onTap, onTapStart, onTapEnd) {
+    static onTap (view, onTap?, onTapStart?, onTapEnd?) {
         const gesture = new TapGesture();
         if (onTap) gesture.on('tap', onTap);
         if (onTapStart) gesture.on('capture', onTapStart);
@@ -68,7 +59,7 @@ export class Gesture {
     }
 
     /// Adds a drag gesture handler.
-    static onDrag (view, onMove, onDragStart, onDragEnd, onDragCancel) {
+    static onDrag (view, onMove?, onDragStart?, onDragEnd?, onDragCancel?) {
         const gesture = new DragGesture();
         if (onMove) gesture.on('move', onMove);
         if (onDragStart) gesture.on('start', onDragStart);
@@ -78,10 +69,22 @@ export class Gesture {
     }
 
     /// Adds a scroll gesture handler.
-    static onScroll (view, onScroll) {
+    static onScroll (view, onScroll?) {
         const gesture = new ScrollGesture();
         if (onScroll) gesture.on('scroll', onScroll);
         view.gestures.add(gesture);
+    }
+}
+
+export namespace Gesture {
+    export enum Type {
+        POINTER = 'pointer',
+        SCROLL = 'scroll',
+    }
+    export enum PointerType {
+        MOUSE = 'mouse',
+        PEN = 'pen',
+        TOUCH = 'touch',
     }
 }
 
@@ -124,8 +127,9 @@ export class ScrollGesture extends Gesture {
 
 export class GestureHandler {
     priority = -Infinity;
+    gesture: Gesture;
 
-    constructor (gesture) {
+    constructor (gesture: Gesture) {
         this.gesture = gesture;
     }
 
@@ -133,19 +137,19 @@ export class GestureHandler {
         return this.gesture.type;
     }
 
-    emit (...args) {
-        this.gesture.emit(...args);
+    emit (event, ...args) {
+        this.gesture.emit(event, ...args);
     }
 
-    onPointerStart () {}
-    onPointerDrag () {}
-    onPointerEnd () {}
+    onPointerStart (e) {}
+    onPointerDrag (e) {}
+    onPointerEnd (e) {}
     /// Called when the event is canceled. No arguments.
     onPointerCancel () {}
-    onPointerEnter () {}
-    onPointerMove () {}
-    onPointerExit () {}
-    onScroll () {}
+    onPointerEnter (e) {}
+    onPointerMove (e) {}
+    onPointerExit (e) {}
+    onScroll (e) {}
 }
 
 export class RawPointerCaptureGestureHandler extends GestureHandler {
@@ -250,6 +254,7 @@ export class DragGestureHandler extends GestureHandler {
 }
 
 const SCROLL_FRICTION = 2;
+const gestureAnimationIds = new WeakMap<Gesture, number>();
 export class ScrollGestureHandler extends GestureHandler {
     priority = Gesture.Priority.TAP;
 
@@ -259,8 +264,8 @@ export class ScrollGestureHandler extends GestureHandler {
     velocity = null;
     lastTime = null;
 
-    animationLoop = (id) => {
-        if (id !== this.gesture.animationId) return;
+    animationLoop = (id: number) => {
+        if (id !== gestureAnimationIds.get(this.gesture)) return;
         requestAnimationFrame(() => this.animationLoop(id));
 
         const dt = (Date.now() - this.lastTime) / 1000;
@@ -272,12 +277,14 @@ export class ScrollGestureHandler extends GestureHandler {
         const dy = -this.velocity.y * dt;
         this.emit('scroll', { dx, dy, captured: true });
 
-        if (Math.abs(this.velocity.x) + Math.abs(this.velocity.y) < 1) this.gesture.animationId++;
+        if (Math.abs(this.velocity.x) + Math.abs(this.velocity.y) < 1) {
+            gestureAnimationIds.set(this.gesture, gestureAnimationIds.get(this.gesture)! + 1);
+        }
     };
 
     onPointerStart ({ absX, absY }) {
-        if (!this.gesture.animationId) this.gesture.animationId = 1;
-        else this.gesture.animationId++;
+        if (!gestureAnimationIds.has(this.gesture)) gestureAnimationIds.set(this.gesture, 1);
+        else gestureAnimationIds.set(this.gesture, gestureAnimationIds.get(this.gesture) + 1);
         this.lastPos = { x: absX, y: absY };
         this.distance = 0;
         this.isDragging = false;
@@ -305,8 +312,8 @@ export class ScrollGestureHandler extends GestureHandler {
     }
     onPointerEnd () {
         this.emit('release');
-        this.gesture.animationId++;
-        this.animationLoop(this.gesture.animationId);
+        gestureAnimationIds.set(this.gesture, gestureAnimationIds.get(this.gesture)! + 1);
+        this.animationLoop(gestureAnimationIds.get(this.gesture)!);
     }
     onPointerCancel () {
         this.emit('release');

@@ -1,4 +1,5 @@
 import { USE_WAAPI, BaseLayer, svgNS, vec2rgb, getTransaction, LayerProperty } from './base';
+import { View } from '../view';
 
 /// A simple graphics layer.
 ///
@@ -13,10 +14,16 @@ export class Layer extends BaseLayer {
     #scale = new LayerProperty([1]);
     #rotation = new LayerProperty([0]);
     #opacity = new LayerProperty([1]);
-    #sublayers = new Set();
+    #sublayers = new Set<BaseLayer>();
     #clipContents = false;
 
-    constructor (owner) {
+    owner: View | null;
+    node: SVGGElement;
+    fillNode: SVGRectElement;
+    clipPath: SVGClipPathElement;
+    clipNode: SVGRectElement;
+
+    constructor (owner: View | null = null) {
         super();
         this.owner = owner;
         this.node = document.createElementNS(svgNS, 'g');

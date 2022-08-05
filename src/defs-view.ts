@@ -5,16 +5,27 @@ import { Scrollbar } from './scrollbar';
 import config from './config';
 import { ExprSlot, ExprView } from './expr-view';
 import { ValueView } from './value-view';
-import { evalExpr, remove as removeNode } from './model';
+import { AscContext, Def, Defs, evalExpr, Expr, remove as removeNode } from './model';
 import { DragController } from './drag-controller';
+
+type Arrows = Map<Def, Map<Expr.Any, ArrowLayer>>;
 
 /// Renders a set of definitions.
 export class DefsView extends View {
     scroll = [0, 0];
-
     dragController = new DragController(this);
+    defs: Defs;
+    needsValueUpdate: boolean;
+    scrollAnchor: DefsAnchorView;
+    scrollbar: Scrollbar;
+    trash: Trash;
+    addDefView: AddDefView;
 
-    constructor (defs) {
+    isInRawExprMode = false;
+    rawExprView: StandaloneExprView | null = null;
+    rawExprScreenSpaceLocation: [number, number] | null = null;
+
+    constructor (defs: Defs) {
         super();
 
         this.layer.background = config.defs.background;
@@ -62,7 +73,7 @@ export class DefsView extends View {
     #arrows = new Map();
 
     addDef = () => {
-        const newDef = {
+        const newDef: Def = {
             ctx: this.defs.ctx,
             type: 'ds',
             name: config.defs.newDefName(this.defs.defs.size),
@@ -114,6 +125,10 @@ export class DefsView extends View {
         this.#showTrash = value;
         this.needsLayout = true;
     }
+
+    leftTrash = false;
+    _wasLeftTrash = false;
+    leftTrashWidth = 0;
 
     layout () {
         super.layout();
@@ -367,7 +382,7 @@ export class DefsView extends View {
         this.tentativeDef = [y, height];
         this.needsLayout = true;
     }
-    endTentative (def) {
+    endTentative (def?: Def) {
         if (def && this.tentativeInsertPos !== null) {
             const defs = [...this.defs.defs];
             defs.splice(this.tentativeInsertPos, 0, def);
@@ -389,10 +404,11 @@ export class DefsView extends View {
 }
 
 class DefsAnchorView extends View {
-    defs = { defs: [] };
+    defs: Defs = { defs: [] } as any; // close enough for our purposes
     floatingExpr = [];
-    arrows = [];
+    arrows: Arrows = new Map();
     arrowContainer = new DefsArrows();
+    addDefView: AddDefView | null = null;
     layout () {
         super.layout();
         this.arrowContainer.arrows = this.arrows;
@@ -410,7 +426,7 @@ class DefsAnchorView extends View {
 }
 
 class DefsArrows extends View {
-    arrows = [];
+    arrows: Arrows = new Map();
     *iterSublayers () {
         for (const arrows of this.arrows.values()) for (const arrow of arrows.values()) yield arrow;
     }
@@ -419,7 +435,10 @@ class DefsArrows extends View {
 /// Contains a standalone expression. Used for raw expr mode.
 class StandaloneExprView extends View {
     wantsChildLayout = true;
-    constructor (modelCtx, dragController) {
+    def: Def;
+    dragController: DragController | null = null;
+    exprSlot: ExprSlot;
+    constructor (modelCtx: AscContext, dragController: DragController) {
         super();
 
         this.def = {
@@ -473,6 +492,14 @@ class StandaloneExprView extends View {
 /// Renders a single definition.
 export class DefView extends View {
     wantsChildLayout = true;
+    def: Def;
+    refView: ExprView;
+    eqLayer: TextLayer;
+    exprSlot: ExprSlot;
+    valueView: DefValueView;
+    dragController: DragController | null = null;
+    parentWidth = 0;
+    _isBeingDragged = false;
 
     constructor (def) {
         super();
@@ -480,6 +507,8 @@ export class DefView extends View {
         this.def = def;
 
         this.refView = new ExprView({
+            ctx: def.ctx,
+            parent: null,
             type: 'r',
             name: '',
         });
@@ -577,7 +606,7 @@ export class DefView extends View {
         this.#createdDragRef = false;
     }
     createDragRef (x, y) {
-        const ref = { ctx: this.def.ctx, type: 'r', name: this.def.name };
+        const ref: Expr.Ref = { ctx: this.def.ctx, parent: null, type: 'r', name: this.def.name };
         const refView = getProtoView(ref, ExprView);
         const transaction = new Transaction(1, 0);
         refView.dragController = this.dragController;
@@ -604,6 +633,11 @@ export class DefView extends View {
             this.dragController.endExprDrag();
         }
     }
+    cancelExprDrag () {
+        if (this.#createdDragRef) {
+            this.dragController.cancelExprDrag();
+        }
+    }
 
     onRename = name => {
         if (name === this.def.name) return; // nothing to do
@@ -622,7 +656,7 @@ export class DefView extends View {
         }
 
         if (this.def.parent && !isDup) {
-            const defs = this.def.parent;
+            const defs = this.def.parent as Defs;
             for (const def of defs.defs) {
                 if (def.name === name) {
                     isDup = true;
@@ -643,7 +677,7 @@ export class DefView extends View {
             refSources.add(ref.source);
             if (ref.source.type === 'r') {
                 ref.source.name = this.def.name;
-            } else if (ref.source.type === 'c') {
+            } else if (ref.source.type === 'c' && ref.source.func.type === 'r') {
                 ref.source.func.name = this.def.name;
             } else {
                 console.warn(`Failed to rename to ${name} in ref with type ${ref.source.type}`);
@@ -669,7 +703,7 @@ export class DefView extends View {
 
     layout () {
         super.layout();
-        this.refView.expr.name = this.def.name;
+        (this.refView.expr as Expr.Ref).name = this.def.name;
         this.refView.layoutIfNeeded();
         const nameSize = this.refView.size;
 
@@ -720,6 +754,10 @@ export class DefView extends View {
 }
 
 class DefValueView extends View {
+    arrowLayer: ArrowLayer;
+    inner: ValueView;
+    loading = false;
+
     constructor () {
         super();
         this.layer.cornerRadius = config.cornerRadius + 6;
@@ -775,7 +813,11 @@ class DefValueView extends View {
 }
 
 class AddDefView extends View {
-    constructor (onAdd) {
+    onAdd: () => void;
+    label: TextLayer;
+    parentWidth = 0;
+
+    constructor (onAdd: () => void) {
         super();
         this.onAdd = onAdd;
         this.layer.background = config.def.background;
@@ -803,6 +845,13 @@ class AddDefView extends View {
 }
 
 export class Trash extends View {
+    titleLayer: TextLayer;
+    dragController: DragController | null = null;
+    active = false;
+    isLeftTrash = false;
+    shouldShow = false;
+    decorationOnly = false;
+
     constructor () {
         super();
 
@@ -816,7 +865,7 @@ export class Trash extends View {
     }
 
     didUnmount () {
-        this.dragController.unregisterTarget(this);
+        this.dragController?.unregisterTarget(this);
     }
 
     get isEmpty () {

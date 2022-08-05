@@ -1,11 +1,16 @@
-import { svgNS } from './layer/base';
+import { BaseLayer, svgNS, Transaction } from './layer/base';
+import { ViewContext } from './context';
+import { View } from './view';
 
 /// Like a ViewRoot, but render-only, and sizes itself to fit content.
 export class RenderViewRoot {
     /// a stack of windows. the topmost is the active one.
     windows = [];
-
     wantsChildLayout = true;
+
+    node: HTMLDivElement;
+    svgNode: SVGSVGElement;
+    ctx: ViewContext;
 
     constructor () {
         this.node = document.createElement('div');
@@ -26,8 +31,14 @@ export class RenderViewRoot {
                 scheduleCommitAfterLayout: this.scheduleCommitAfterLayout,
             },
             nodesAtPoint: this.getNodesAtPoint,
-            beginCapture: () => {},
-            push: () => {},
+            beginCapture: () => {
+                throw new Error('missing beginCapture');
+            },
+            push: () => {
+                throw new Error('missing push');
+            },
+            beginInput: null,
+            codeMirrorNode: null,
         };
     }
 
@@ -82,15 +93,21 @@ export class RenderViewRoot {
         }
     };
 
-    getTargetsAtPoint = (x, y) => {
-        const stackTop = this.windows[this.windows.length - 1];
-        if (!stackTop) return [];
+    getTargetsAtPoint = (x, y, allWindows = false) => {
+        let windows = this.windows;
+        if (!allWindows) {
+            const stackTop = this.windows[this.windows.length - 1];
+            if (!stackTop) return [];
+            windows = [stackTop];
+        }
         const targets = [];
-        this.#getNodesAtPointInner(x, y, 0, 0, stackTop.layer, targets);
+        for (const window of windows) {
+            this.#getNodesAtPointInner(x, y, 0, 0, window.layer, targets);
+        }
         return targets;
     };
-    getNodesAtPoint = (x, y) => {
-        return this.getTargetsAtPoint(x, y).map(({ target }) => target);
+    getNodesAtPoint = (x, y, allWindows = false) => {
+        return this.getTargetsAtPoint(x, y, allWindows).map(({ target }) => target);
     };
 
     layout () {
@@ -103,9 +120,9 @@ export class RenderViewRoot {
         }
 
         this.node.style.width = width + 'px';
-        this.svgNode.setAttribute('width', width);
+        this.svgNode.setAttribute('width', width.toString());
         this.node.style.height = height + 'px';
-        this.svgNode.setAttribute('height', height);
+        this.svgNode.setAttribute('height', height.toString());
     }
 
     // animation loop handling
@@ -113,8 +130,12 @@ export class RenderViewRoot {
     animationLoop = false;
     emptyCycles = 0;
 
-    scheduledLayout = new Set();
-    scheduleLayout = (view) => {
+    scheduledLayout = new Set<View>();
+    _currentLayoutSet: Set<View> | null = null;
+    scheduledDisplay = new Set<BaseLayer>();
+    scheduledLayoutCommits = new Set<Transaction>();
+
+    scheduleLayout = (view: View) => {
         if (this._currentLayoutSet && !this._currentLayoutSet.has(view)) {
             // we got a layout schedule request while currently in layout;
             // batch this view for the current run as well, if possible
@@ -125,20 +146,18 @@ export class RenderViewRoot {
         this.startLoop(true);
     };
 
-    scheduledDisplay = new Set();
-    scheduleDisplay = (layer) => {
+    scheduleDisplay = (layer: BaseLayer) => {
         this.scheduledDisplay.add(layer);
         this.startLoop();
     };
 
-    scheduledLayoutCommits = new Set();
-    scheduleCommitAfterLayout = (transaction) => {
+    scheduleCommitAfterLayout = (transaction: Transaction) => {
         this.scheduledLayoutCommits.add(transaction);
         this.startLoop(true);
     };
 
     /// Starts the animation loop.
-    startLoop (defer) {
+    startLoop (defer = false) {
         if (this.animationLoop) return;
         this.animationLoop = true;
         const id = ++this.animationLoopId;
@@ -170,7 +189,7 @@ export class RenderViewRoot {
                 console.error(err);
             }
         }
-        delete this._currentLayoutSet;
+        this._currentLayoutSet = null;
 
         if (didAThing && this.wantsChildLayout) this.layout();
 

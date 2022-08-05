@@ -1,10 +1,12 @@
-import PointerTracker from 'pointer-tracker';
+import PointerTracker, { InputEvent } from 'pointer-tracker';
 import { Gesture } from './gesture';
 import { RenderViewRoot } from './render-view-root';
+import { View } from './view';
 
 /// View root handler. Handles interfacing with the DOM and time. Has a fixed size.
 export class ViewRoot extends RenderViewRoot {
     wantsChildLayout = false;
+    pointerTracker: PointerTracker;
 
     constructor () {
         super();
@@ -15,10 +17,10 @@ export class ViewRoot extends RenderViewRoot {
 
         // TODO: fix this (does not cancel events)
         const self = this;
-        this.pointerTracker = new PointerTracker(this.svgNode, {
+        this.pointerTracker = new PointerTracker(this.svgNode as unknown as HTMLElement, {
             start (pointer, event) {
                 event.preventDefault();
-                self.beginPointer(pointer);
+                self.beginPointer(pointer, event);
                 return true;
             },
             move (prevPointers, changedPointers, event) {
@@ -39,7 +41,8 @@ export class ViewRoot extends RenderViewRoot {
     }
 
     #trackedPointers = new Map();
-    beginPointer = pointer => {
+    capturedInputTarget: { target: View, x: number, y: number } | null = null;
+    beginPointer = (pointer, event: InputEvent) => {
         const rect = this.node.getBoundingClientRect();
         const x = pointer.clientX - rect.left;
         const y = pointer.clientY - rect.top;
@@ -60,7 +63,11 @@ export class ViewRoot extends RenderViewRoot {
         const gestureTypes = new Set();
         let highestPriority = -Infinity;
         for (const candidate of candidates) {
-            const g = candidate.target.getGesturesForType(Gesture.Type.POINTER, event.pointerType);
+            const pointerType = event instanceof PointerEvent ? Gesture.PointerType[event.pointerType]
+                : event instanceof TouchEvent ? Gesture.PointerType.TOUCH
+                : Gesture.PointerType.MOUSE;
+
+            const g = candidate.target.getGesturesForType(Gesture.Type.POINTER, pointerType);
             if (g.length) {
                 chosenTargets.push(candidate);
                 for (const gesture of g) {
@@ -214,7 +221,7 @@ export class ViewRoot extends RenderViewRoot {
     }
     set width (value) {
         this.node.style.width = value + 'px';
-        this.svgNode.setAttribute('width', value);
+        this.svgNode.setAttribute('width', value.toString());
         this.layout();
     }
     get height () {
@@ -222,7 +229,7 @@ export class ViewRoot extends RenderViewRoot {
     }
     set height (value) {
         this.node.style.height = value + 'px';
-        this.svgNode.setAttribute('height', value);
+        this.svgNode.setAttribute('height', value.toString());
         this.layout();
     }
 

@@ -21,7 +21,185 @@ import config from './config';
 //! ## Additional fields on all objects
 //! - parent: object or nullish
 
-export function createContext () {
+export const NODE_DEFS = 'd';
+export const NODE_DEF = 'ds';
+export const NODE_REF = 'r';
+export const NODE_NULL = 'u';
+export const NODE_BOOL = 'b';
+export const NODE_NUM = 'n';
+export const NODE_STR = 's';
+export const NODE_MAT = 'm';
+export const NODE_LIST = 'l';
+export const NODE_CALL = 'c';
+export const NODE_FNDEF = 'f';
+export const NODE_SWITCH = 'w';
+export const NODE_FUNC_PARAM = 'fp';
+export const NODE_DEF_EXT = 'ds-ext';
+
+export type RawDefs = {
+    [name: string | symbol]: RawExpr,
+};
+export type RawMatrixValue = null | boolean | number | string | RawMatrixValue[];
+export type RawExpr = { t: 'u' }
+    | { t: 'b', v: boolean }
+    | { t: 'n', v: number }
+    | { t: 's', v: string }
+    | { t: 'm', v: RawMatrixValue }
+    | { t: 'l', v: string[] }
+    | { t: 'w', m: { c: string, v: string }[] }
+    | { t: 'c', f: string, a: string[] }
+    | { t: 'f', b: RawDefs };
+
+export type MutationListener = (node: AnyNode) => void;
+export type ExternalDefsMutationListener = () => void;
+export type FormVarsMutationListener = () => void;
+export type StartMutationListener = () => void;
+export type FlushMutationListener = () => void;
+export interface AscContext {
+    onMutation(listener: MutationListener);
+    notifyMutation(node: AnyNode);
+    externalDefs: RawDefs[];
+    externalRefs: Set<ReverseRef>;
+    _prevExternalRefs: Set<ReverseRef>;
+    onExternalDefsMutation(listener: ExternalDefsMutationListener);
+    notifyExternalDefsMutation();
+    formVars: FormVar[];
+    formVarRefs: Set<ReverseRef>;
+    onFormVarsMutation(listener: FormVarsMutationListener);
+    notifyFormVarsMutation();
+    onStartMutation(listener: StartMutationListener);
+    onFlushMutation(listener: FlushMutationListener);
+    startMutation();
+    flushMutation();
+}
+
+export interface FormVar {
+    name: string;
+    type: 'u' | 'b' | 'n' | 's' | 'm' | 'timestamp';
+    value: null | boolean | number | string | RawMatrixValue | Date;
+}
+
+export interface BaseNode {
+    ctx: AscContext;
+    type: string;
+    parent: AnyNode | null;
+}
+
+export interface Defs extends BaseNode {
+    type: 'd';
+    defs: Set<Def>;
+    floatingExpr: Set<Expr.Any>;
+}
+export interface Def extends BaseNode {
+    type: 'ds';
+    name: string;
+    expr: Expr.Any;
+    isStdlib?: boolean;
+    nameOverride?: string;
+    references?: Set<ForwardRef>;
+    referencedBy?: Set<ReverseRef>;
+    // If true, this is a standalone expression
+    flatExpr?: boolean;
+}
+export interface FuncParam extends BaseNode {
+    type: 'fp';
+    name: string;
+}
+export interface ExternalDef extends BaseNode {
+    type: 'ds-ext';
+    isExternal: true;
+}
+
+interface ReverseRef {
+    def: Def;
+    source: Expr.Any;
+}
+type ForwardRef = ForwardRefDef | ForwardRefFormVar;
+interface ForwardRefDef {
+    target: Def | FuncParam | ExternalDef;
+    expr: Expr.Any;
+}
+const FORM_VAR = 'form-var'; // form var ref sentinel value
+interface ForwardRefFormVar {
+    target: 'form-var';
+    name: string;
+    expr: Expr.Any;
+}
+
+export type ResolverScope = Map<string, Def | ExternalDef | FuncParam>;
+
+export type ExprSlotSpec = ExprSlotEnum | ExprSlotSwitchCond;
+export interface ExprSlotEnum {
+    type: 'enum';
+    variants: { [k: string]: string };
+}
+export interface ExprSlotSwitchCond {
+    type: 'switchcond';
+}
+
+export namespace Expr {
+    export interface BaseExpr extends BaseNode {
+        references?: Set<ForwardRef>;
+    }
+    export interface Null extends BaseExpr {
+        type: 'u';
+    }
+    export interface Bool extends BaseExpr {
+        type: 'b';
+        value: boolean;
+    }
+    export interface Number extends BaseExpr {
+        type: 'n';
+        value: number;
+    }
+    export interface String extends BaseExpr {
+        type: 's';
+        value: string;
+    }
+    export type MatrixValue = null | number | string | MatrixValue[];
+    export interface Matrix extends BaseExpr {
+        type: 'm';
+        value: MatrixValue;
+    }
+    export interface List extends BaseExpr {
+        type: 'l';
+        items: Any[];
+    }
+    export interface Call extends BaseExpr {
+        type: 'c';
+        func: Any;
+        args: Any[];
+    }
+    export interface Switch extends BaseExpr {
+        type: 'w';
+        matches: Switch.Case[];
+    }
+    export namespace Switch {
+        export interface Case {
+            cond: Any | null;
+            value: Any;
+        }
+    }
+    export interface Ref extends BaseExpr {
+        refNode?: Def | ExternalDef | FuncParam;
+        type: 'r';
+        name: string;
+    }
+
+    export interface FnDef extends BaseExpr {
+        type: 'f';
+        params: string[];
+        body: Defs;
+        slots?: ExprSlotSpec[];
+        infix?: boolean;
+    }
+
+    export type Any = Null | Bool | Number | String | Matrix | List | Call | FnDef | Switch | Ref;
+}
+
+export type AnyNode = Expr.Any | Defs | Def;
+
+export function createContext (): AscContext {
     const mutationListeners = [];
     const startMutListeners = [];
     const flushListeners = [];
@@ -92,64 +270,81 @@ export function createContext () {
                 }
             }
         },
-    };
+    } as AscContext;
     return ctx;
 }
 
-export function makeRef (name, ctx) {
-    return { ctx, type: 'r', name };
+export function makeRef (name, ctx): Expr.Ref {
+    return { ctx, parent: null, type: NODE_REF, name };
 }
 
-function cloneExprObject (expr) {
+function cloneExprObject (expr: Expr.Any): Expr.Any {
     if (typeof expr !== 'object') return expr;
-    if (expr.type === 'c') {
+    if (expr.type === NODE_CALL) {
         return {
-            type: 'c',
+            ctx: expr.ctx,
+            parent: null,
+            type: NODE_CALL,
             func: cloneExprObject(expr.func),
             args: expr.args.map(cloneExprObject),
         };
-    } else if (expr.type === 'f') {
+    } else if (expr.type === NODE_FNDEF) {
         // FIXME: body needs to be cloned too
         return {
-            type: 'f',
+            ctx: expr.ctx,
+            parent: null,
+            type: NODE_FNDEF,
             params: [...expr.params],
             body: expr.body,
         };
-    } else if (expr.type === 'w') {
+    } else if (expr.type === NODE_SWITCH) {
         return {
-            type: 'w',
+            ctx: expr.ctx,
+            parent: null,
+            type: NODE_SWITCH,
             matches: expr.matches.map(match => {
-                const m = {};
-                if ('cond' in match) m.cond = cloneExprObject(match.cond);
-                m.value = cloneExprObject(match.value);
+                let cond = null;
+                if ('cond' in match) cond = cloneExprObject(match.cond);
+                const value = cloneExprObject(match.value);
+                return { cond, value };
             }),
         };
-    } else if (expr.type === 'l') {
-        return { type: 'l', value: expr.value.map(cloneExprObject) };
-    } else if (expr.type === 'm') {
+    } else if (expr.type === NODE_LIST) {
+        return {
+            ctx: expr.ctx,
+            parent: null,
+            type: NODE_LIST,
+            items: expr.items.map(cloneExprObject),
+        };
+    } else if (expr.type === NODE_MAT) {
         const cloneMatrix = o => {
             if (Array.isArray(o)) return o.map(cloneMatrix);
             else return o;
         };
-        return { type: 'm', value: cloneMatrix(expr.value) };
+        return {
+            ctx: expr.ctx,
+            parent: null,
+            type: NODE_MAT,
+            value: cloneMatrix(expr.value),
+        };
     } else return { ...expr };
 }
 
 /// Converts raw defs to editor defs.
-export function fromRawDefs (defs, ctx) {
-    // mapping from definition names to ids
-    const defMapping = new Map();
+export function fromRawDefs (defs, ctx: AscContext): Defs {
+    // mapping from definition names to exprs
+    const defMapping = new Map<string, Expr.Any>();
 
     // cache mapping _defs to objects
-    const subexprCache = new Map();
+    const subexprCache = new Map<string, Expr.Any>();
     // locks to prevent infinite recursion when resolving _defs
-    const subexprLocks = new Set();
-    // _defs that needed to be turned into actual user-visible defs
-    const elevatedSubExprs = new Map();
+    const subexprLocks = new Set<string>();
+    // _defs that needed to be turned into actual user-visible defs. contains their new name
+    const elevatedSubExprs = new Map<string, string>();
 
     // resolves references in expressions
     // this is evaluated lazily because we would need to toposort _def declarations otherwise
-    const resolveExpr = (name, forceRef) => {
+    const resolveExpr = (name: string, forceRef = false) => {
         if (!name.startsWith('_')) {
             // this is a regular old reference
             return makeRef(name, ctx);
@@ -222,28 +417,46 @@ export function fromRawDefs (defs, ctx) {
         defMapping.set(name, fromRawExpr(defs[name], resolveExpr, ctx));
     }
 
-    const output = { ctx, type: 'd', defs: new Set(), floatingExpr: new Set() };
+    const output: Defs = {
+        ctx,
+        type: 'd',
+        defs: new Set(),
+        floatingExpr: new Set(),
+        parent: null,
+    };
     for (const [k, v] of defMapping) {
-        const def = { ctx, type: 'ds', name: k, expr: v, parent: output };
+        const def: Def = {
+            ctx,
+            type: 'ds',
+            name: k,
+            expr: v,
+            parent: output,
+        };
         v.parent = def;
         output.defs.add(def);
     }
     return output;
 }
 
-export function fromRawExpr (expr, resolveExpr, ctx) {
+export type ResolveExpr = (name: string, forceRef?: boolean) => Expr.Any;
+export function fromRawExpr (expr, resolveExpr: ResolveExpr, ctx): Expr.Any {
     if (expr.t === 'u') {
-        return { ctx, type: 'u' };
+        return { ctx, parent: null, type: 'u' };
     } else if (expr.t === 'b') {
-        return { ctx, type: 'b', value: expr.v };
+        return { ctx, parent: null, type: 'b', value: expr.v };
     } else if (expr.t === 'n') {
-        return { ctx, type: 'n', value: expr.v };
+        return { ctx, parent: null, type: 'n', value: expr.v };
     } else if (expr.t === 's') {
-        return { ctx, type: 's', value: expr.v };
+        return { ctx, parent: null, type: 's', value: expr.v };
     } else if (expr.t === 'm') {
-        return { ctx, type: 'm', value: expr.v };
+        return { ctx, parent: null, type: 'm', value: expr.v };
     } else if (expr.t === 'l') {
-        const list = { ctx, type: 'l', items: expr.v.map(x => resolveExpr(x)) };
+        const list: Expr.List = {
+            ctx,
+            parent: null,
+            type: 'l',
+            items: expr.v.map(x => resolveExpr(x)),
+        };
         for (const item of list.items) item.parent = list;
         return list;
     } else if (expr.t === 'c') {
@@ -252,8 +465,9 @@ export function fromRawExpr (expr, resolveExpr, ctx) {
             return resolveExpr(expr.f);
         }
 
-        const call = {
+        const call: Expr.Call = {
             ctx,
+            parent: null,
             type: 'c',
             func: resolveExpr(expr.f, true),
             args: expr.a.map(x => resolveExpr(x)),
@@ -263,12 +477,19 @@ export function fromRawExpr (expr, resolveExpr, ctx) {
         return call;
     } else if (expr.t === 'f') {
         const defs = fromRawDefs(expr.b, ctx);
-        const func = { ctx, type: 'f', params: expr.p, body: defs };
+        const func: Expr.FnDef = {
+            ctx,
+            parent: null,
+            type: 'f',
+            params: expr.p,
+            body: defs,
+        };
         func.body.parent = func;
         return func;
     } else if (expr.t === 'w') {
-        const sw = {
+        const sw: Expr.Switch = {
             ctx,
+            parent: null,
             type: 'w',
             matches: [],
         };
@@ -285,7 +506,7 @@ export function fromRawExpr (expr, resolveExpr, ctx) {
     }
 }
 
-export function toRawDefs (defs) {
+export function toRawDefs (defs: Defs) {
     let idCounter = 0;
     // Returns a new _def identifier
     const getIdent = () => {
@@ -310,13 +531,13 @@ export function toRawDefs (defs) {
 
 /// Tries to turn an expr into a string if it’s a ref, and creates an auxiliary definition
 /// otherwise.
-function stringifyRef (expr, makeAux) {
+function stringifyRef (expr: Expr.Any, makeAux) {
     if (!expr) return makeAux({ t: 'u' });
     if (expr.type === 'r') return expr.name;
     else return makeAux(toRawExpr(expr, makeAux));
 }
 
-export function toRawExpr (expr, makeAux) {
+export function toRawExpr (expr: Expr.Any, makeAux) {
     if (!expr) return { t: 'u' };
     if (expr.type === 'r') {
         // we can't call directly in case it's a function, so we pass it through id
@@ -367,13 +588,14 @@ export function toRawExpr (expr, makeAux) {
 /// Removes a node from its parent.
 ///
 /// Returns an object that can undo the removal, assuming nothing else was mutated.
-export function remove (node) {
+export function remove (node: AnyNode) {
     const parent = node.parent;
     if (!parent) return;
 
     let innerUndo;
 
     if (parent.type === 'd') {
+        if (node.type !== 'ds') throw new Error('internal inconsistency: expected defs child to be a def');
         if (!parent.defs.has(node)) throw new Error('internal inconsistency: expected parent defs to contain self');
         parent.defs.delete(node);
         innerUndo = () => parent.defs.add(node);
@@ -382,22 +604,24 @@ export function remove (node) {
         parent.expr = null;
         innerUndo = () => parent.expr = node;
     } else if (parent.type === 'l') {
-        const index = parent.items.indexOf(node);
+        const expr = node as Expr.Any;
+        const index = parent.items.indexOf(expr);
         if (index === -1) throw new Error('internal inconsistency: expected parent list to contain self');
         parent.items.splice(index, 1);
-        innerUndo = () => parent.items.splice(index, 0, node);
+        innerUndo = () => parent.items.splice(index, 0, expr);
     } else if (parent.type === 'c') {
-        if (parent.func === node) {
+        const expr = node as Expr.Any;
+        if (parent.func === expr) {
             parent.func = null;
-            innerUndo = () => parent.func = node;
+            innerUndo = () => parent.func = expr;
         } else {
-            const index = parent.args.indexOf(node);
+            const index = parent.args.indexOf(expr);
             if (index === -1) throw new Error('internal inconsistency: expected parent call to contain self');
             parent.args[index] = null;
-            innerUndo = () => parent.args[index] = node;
+            innerUndo = () => parent.args[index] = expr;
         }
     } else if (parent.type === 'f') {
-        if (parent.expr !== node) throw new Error('internal inconsistency: expected body in parent func to be self');
+        if (parent.body !== node) throw new Error('internal inconsistency: expected body in parent func to be self');
         parent.body = null;
         innerUndo = () => parent.body = node;
     } else if (parent.type === 'w') {
@@ -430,7 +654,7 @@ export function remove (node) {
     };
 }
 
-export function makeStdRefs () {
+export function makeStdRefs (): Map<string, Def> {
     const refs = new Map();
     for (const category in config.stdlibCategories) {
         const items = config.stdlibCategories[category];
@@ -438,7 +662,7 @@ export function makeStdRefs () {
             const nameOverride = config.stdlibNames[name] || null;
             const args = config.stdlibArgs[name] || [];
 
-            const infix = name.match(infixIdentRegexF);
+            const infix = !!name.match(infixIdentRegexF);
 
             refs.set(name, {
                 type: 'ds',
@@ -458,10 +682,8 @@ export function makeStdRefs () {
     return refs;
 }
 
-const FORM_VAR = Symbol('form var'); // form var ref sentinel value
-
 /// Resolves refs in defs.
-export function resolveRefs (defs, reducing = false, parentScope) {
+export function resolveRefs (defs: Defs, reducing = false, parentScope?: ResolverScope) {
     const ctx = defs.ctx;
 
     if (!parentScope) {
@@ -482,36 +704,36 @@ export function resolveRefs (defs, reducing = false, parentScope) {
     for (const defs of ctx.externalDefs) {
         for (const def in defs) {
             if (typeof def !== 'string' || def.startsWith('_')) continue;
-            const defObj = { ctx, isExternal: true };
+            const defObj: ExternalDef = { ctx, parent: null, type: NODE_DEF_EXT, isExternal: true };
             defIndex.set(def, defObj);
             externalDefs.add(defObj);
         }
     }
 
     for (const def of defs.defs) {
-        const refs = new Set();
+        const refs = new Set<ForwardRef>();
         resolveRefsInExpr(def.expr, reducing, defIndex, refs);
 
         def.references = refs;
         def.referencedBy = new Set();
 
         for (const ref of refs) {
-            const { target, name, expr } = ref;
+            const { target, expr, ...etc } = ref;
             if (!reverseRefs.has(target)) reverseRefs.set(target, new Set());
-            reverseRefs.get(target).add({ def, source: expr, name });
+            reverseRefs.get(target).add({ def, source: expr, ...etc });
         }
     }
 
     for (const expr of defs.floatingExpr) {
-        const refs = new Set();
+        const refs = new Set<ForwardRef>();
         resolveRefsInExpr(expr, reducing, defIndex, refs);
 
         expr.references = refs;
 
         for (const ref of refs) {
-            const { target, name, expr } = ref;
+            const { target, expr, ...etc } = ref;
             if (!reverseRefs.has(target)) reverseRefs.set(target, new Set());
-            reverseRefs.get(target).add({ def: null, source: expr, name });
+            reverseRefs.get(target).add({ def: null, source: expr, ...etc });
         }
     }
 
@@ -532,18 +754,24 @@ export function resolveRefs (defs, reducing = false, parentScope) {
 }
 
 /// Resolves refs in the given expression, recursively
-function resolveRefsInExpr (expr, reducing, defs, refs, _srcOverride = null) {
+function resolveRefsInExpr (
+    expr: Expr.Any,
+    reducing: boolean,
+    defs: ResolverScope,
+    refs: Set<ForwardRef>,
+    source: Expr.Any = expr,
+) {
     if (!expr) return;
     if (expr.type === 'r') {
         // this is a ref!
         if (expr.name.startsWith('@')) {
             // this is a form var ref
             // ONLY add a reverse ref
-            refs.add({ target: FORM_VAR, name: expr.name, expr: _srcOverride || expr });
+            refs.add({ target: FORM_VAR, name: expr.name, expr: source });
         } else {
             // this is a regular ref
             expr.refNode = defs.get(expr.name);
-            if (expr.refNode) refs.add({ target: expr.refNode, expr: _srcOverride || expr });
+            if (expr.refNode) refs.add({ target: expr.refNode, expr: source });
         }
     } else if (expr.type === 'l') {
         for (const item of expr.items) {
@@ -555,7 +783,11 @@ function resolveRefsInExpr (expr, reducing, defs, refs, _srcOverride = null) {
             resolveRefsInExpr(arg, reducing, defs, refs);
         }
 
-        if (reducing && expr.func.refNode && expr.func.refNode.isStdlib && expr.func.refNode.name === 'id') {
+        if (reducing
+            && expr.func.type === NODE_REF
+            && expr.func.refNode?.type === NODE_DEF
+            && expr.func.refNode.isStdlib
+            && expr.func.refNode.name === 'id') {
             // identity function!
             if (expr.args.length === 1) {
                 // if there's just one argument id doesn't actually do anything
@@ -569,7 +801,14 @@ function resolveRefsInExpr (expr, reducing, defs, refs, _srcOverride = null) {
         }
     } else if (expr.type === 'f') {
         const bodyScope = new Map(defs);
-        for (const param of expr.params) bodyScope.set(param, { t: 'fp', name: param });
+        for (const param of expr.params) {
+            bodyScope.set(param, {
+                ctx: expr.ctx,
+                parent: expr,
+                type: NODE_FUNC_PARAM,
+                name: param,
+            });
+        }
         resolveRefs(expr.body, reducing, bodyScope);
     } else if (expr.type === 'w') {
         for (const m of expr.matches) {
@@ -579,9 +818,9 @@ function resolveRefsInExpr (expr, reducing, defs, refs, _srcOverride = null) {
     }
 }
 
-export function evalExpr (expr) {
+export function evalExpr (expr: Expr.Any) {
     if (!expr || !expr.parent) return;
-    let def = expr;
+    let def: AnyNode = expr;
     while (def) {
         if (def.type === 'ds') {
             break;
@@ -592,7 +831,7 @@ export function evalExpr (expr) {
 
     if (!def) return; // no def?
 
-    const defs = def.parent;
+    const defs = def.parent as Defs;
     if (!defs) return; // no defs
     const rawDefs = toRawDefs(defs);
 
