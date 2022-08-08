@@ -11,7 +11,13 @@ import {
 } from './comb';
 import { infixIdentRegex, bareIdentRegex, numberRegex } from './shared';
 
+export type Span = [number, number];
+
 class StrCursor {
+    str: string;
+    pos: number;
+    errors: string[];
+
     constructor (str) {
         this.str = str;
         this.pos = 0;
@@ -61,6 +67,8 @@ class StrCursor {
 }
 
 export class LexError {
+    contents: LexError[] | string;
+    span: Span;
     constructor (msgOrErrs) {
         this.contents = msgOrErrs;
     }
@@ -86,12 +94,16 @@ export class LexError {
     }
 }
 
-class Token {
+export abstract class Token {
+    span: Span | null = null;
+    contents?: unknown;
     valueOf () {
         return this.toString();
     }
 }
 export class IdentToken extends Token {
+    ident: string;
+    isRaw: boolean;
     constructor (ident, isRaw = false) {
         super();
         this.ident = ident;
@@ -107,6 +119,8 @@ export class InfixToken extends IdentToken {
     }
 }
 export class NumberToken extends Token {
+    int: string;
+    frac: string;
     constructor (int, frac) {
         super();
         this.int = int;
@@ -117,6 +131,7 @@ export class NumberToken extends Token {
     }
 }
 export class BoolToken extends Token {
+    value: boolean;
     constructor (value) {
         super();
         this.value = value;
@@ -142,6 +157,7 @@ export class BreakToken extends WhitespaceToken {
     }
 }
 export class StringToken extends Token {
+    contents: string;
     constructor (contents) {
         super();
         this.contents = contents;
@@ -156,6 +172,7 @@ export class DelimToken extends Token {
     }
 }
 export class ContainerToken extends Token {
+    contents: Token[];
     constructor (contents) {
         super();
         this.contents = contents;
@@ -182,7 +199,7 @@ export class IndentToken extends ContainerToken {
     }
 }
 
-const spanned = parser => str => {
+const spanned = parser => (str: StrCursor) => {
     const start = str.pos;
     try {
         const item = parser(str);
@@ -195,10 +212,10 @@ const spanned = parser => str => {
         throw err2;
     }
 };
-const xtag = (t, desc) => {
+const xtag = (t: string, desc?: string) => {
     const u = tag(t, desc);
 
-    return str => {
+    return (str: StrCursor) => {
         const tm = u(str);
         if (!str.eof()) {
             const bareMatch = (t + str.peek()).match(bareIdentRegex);
@@ -210,7 +227,7 @@ const xtag = (t, desc) => {
     };
 };
 
-const rawIdentInner = (str) => {
+const rawIdentInner = (str: StrCursor) => {
     let hashes = 0;
     let c;
     while ((c = str.peek())) {
@@ -262,7 +279,7 @@ const oneValueToken = oneOf(nul, bool, delim, number, string, ident, infixIdent,
 const nbws = spanned(map(regex(/^[ \t]+/, 'non-breaking whitespace'), () => new SpaceToken()));
 const nbToken = oneOf(nbws, oneValueToken);
 
-const treeIndent = spanned((str) => {
+const treeIndent = spanned((str: StrCursor) => {
     // find next line break
     while (true) {
         const c = str.peek();
@@ -354,7 +371,7 @@ function tokenStream (str) { // for hoisting
     return _tokenStream(str);
 }
 
-export function lex (src) {
+export function lex (src): Token[] {
     const cursor = new StrCursor(src);
     const tokens = tokenStream(cursor);
     if (!cursor.eof()) {

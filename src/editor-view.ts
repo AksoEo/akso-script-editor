@@ -3,6 +3,8 @@ import { Toolbar } from './toolbar';
 import { CanvasView } from './canvas-view';
 
 export class EditorView extends View {
+    toolbar: Toolbar;
+    canvasView: CanvasView;
 
     constructor () {
         super();

@@ -46,7 +46,7 @@ CodeMirror.defineSimpleMode('asct', {
             token: 'operator',
         },
         {
-            regex: /\[|\]/,
+            regex: /[\[\]]/,
             token: 'list',
         },
     ],

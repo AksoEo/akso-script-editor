@@ -1,7 +1,7 @@
 import { infixIdentRegexF, bareIdentRegexF, OP_PREC } from './shared';
 
 function indent (str) {
-    return str.split('\n').map(x => '    ' + x).join('\n');
+    return str.split('\n').map(x => x ? '    ' + x : x).join('\n');
 }
 
 const RESERVED_IDENTS = [
@@ -24,7 +24,9 @@ const SWITCH_PREC = 92;
 const HIGHEST_PREC = Infinity;
 
 class Frag {
-    constructor (str, prec) {
+    str: string;
+    prec: number;
+    constructor (str: string, prec: number) {
         this.str = str;
         this.prec = prec;
     }
@@ -34,7 +36,7 @@ class Frag {
     p () {
         return '(' + this.str + ')';
     }
-    embedp (p) {
+    embedp (p: number) {
         if (p < this.prec) return this.p();
         else return this.nop();
     }
@@ -42,9 +44,9 @@ class Frag {
 
 function writeIdent (ident) {
     if (!ident.match(bareIdentRegexF) || RESERVED_IDENTS.includes(ident)) {
-        let hashes = 1;
-        while (ident.includes('"' + '#'.repeat(hashes))) hashes++;
-        hashes = '#'.repeat(hashes);
+        let hashCount = 1;
+        while (ident.includes('"' + '#'.repeat(hashCount))) hashCount++;
+        const hashes = '#'.repeat(hashCount);
 
         return new Frag(`r${hashes}"${ident}"${hashes}`, ATOM_PREC);
     }
@@ -52,14 +54,18 @@ function writeIdent (ident) {
 }
 
 function writeMatrix (matrix) {
-    const s = '[' + matrix.map(item => {
+    const contents = matrix.map(item => {
         if (item === null) return writeExpr({ type: 'u' }).nop();
         if (typeof item === 'boolean') return writeExpr({ type: 'b', value: item }).nop();
         if (typeof item === 'number') return writeExpr({ type: 'n', value: item }).nop();
         if (typeof item === 'string') return writeExpr({ type: 's', value: item }).nop();
         if (Array.isArray(item)) return writeMatrix(item).nop();
         throw new Error(`illegal matrix item of type ${typeof item}`);
-    }).join(', ') + ']';
+    });
+    const contentsLength = contents.map(item => item.length).reduce((a, b) => a + b, 0);
+    const s = contentsLength > 80
+        ? '[\n' + indent(contents.join(',\n')) + '\n]'
+        : '[' + contents.join(', ') + ']';
     return new Frag(s, ATOM_PREC);
 }
 

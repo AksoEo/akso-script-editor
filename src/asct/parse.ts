@@ -9,6 +9,7 @@ import {
     EOFError,
 } from './comb';
 import {
+    Token,
     NullToken,
     BoolToken,
     NumberToken,
@@ -25,9 +26,16 @@ import {
     IndentToken,
 } from './lex';
 import { OP_PREC } from './shared';
+import { AscContext } from '../model';
 
 class TokenCursor {
-    constructor (tokenStream, ctx) {
+    tokens: Token[];
+    pos: number[];
+    proxy: null;
+    errors: ParseError[];
+    ctx: AscContext;
+    prevTok: Token | null;
+    constructor (tokenStream: Token[], ctx: AscContext) {
         this.tokens = tokenStream;
         this.pos = [0];
         this.proxy = null;
@@ -36,13 +44,13 @@ class TokenCursor {
         this.prevTok = null;
     }
 
-    peek () {
+    peek (): Token {
         if (this.eof()) throw new EOFError(`unexpected stream end`);
-        let t = { contents: this.tokens };
+        let t: Token | { contents: Token[] } = { contents: this.tokens };
         for (const p of this.pos) {
             t = t.contents[p];
         }
-        return t;
+        return t as Token;
     }
 
     span () {
@@ -72,11 +80,11 @@ class TokenCursor {
     eof () {
         const pos = [...this.pos];
         const lastPos = pos.pop();
-        let t = { contents: this.tokens };
+        let t: Token | { contents: Token[] } = { contents: this.tokens };
         for (const p of pos) {
             t = t.contents[p];
         }
-        return t.contents.length === lastPos;
+        return (t.contents as Token[]).length === lastPos;
     }
 
     topLevelEof () {
@@ -115,6 +123,8 @@ class TokenCursor {
 }
 
 class ParseError {
+    contents: ParseError[] | string;
+    state: TokenCursor | null;
     constructor (msgOrErrs, state = null) {
         this.contents = msgOrErrs;
         this.state = state;
@@ -147,7 +157,7 @@ class ParseError {
     }
 }
 
-const group = (gclass, inner) => tok => {
+const group = (gclass, inner) => (tok) => {
     const node = tok.peek();
     if (!(node instanceof gclass)) tok.throw(`unexpected ${node}, expected ${gclass.name}`);
     tok.enter();
@@ -156,7 +166,7 @@ const group = (gclass, inner) => tok => {
     tok.next();
     return i;
 };
-const ctxify = (inner) => tok => {
+const ctxify = (inner) => (tok) => {
     const res = inner(tok);
     res.ctx = tok.ctx;
     return res;
@@ -170,10 +180,25 @@ const bws = tok => {
     tok.throw('expected line break');
 };
 
-const tnull = ctxify(map(match(x => x instanceof NullToken, 'null'), () => ({ type: 'u' })));
-const tnumber = ctxify(map(match(x => x instanceof NumberToken, 'number'), x => ({ type: 'n', value: parseFloat(x.int + '.' + (x.frac || '0'), 10) })));
-const tbool = ctxify(map(match(x => x instanceof BoolToken, 'bool'), x => ({ type: 'b', value: x.value })));
-const tstring = ctxify(map(match(x => x instanceof StringToken, 'string'), x => ({ type: 's', value: x.contents })));
+const tnull = ctxify(map(match(x => x instanceof NullToken, 'null'), () => ({
+    type: 'u',
+    parent: null,
+})));
+const tnumber = ctxify(map(match(x => x instanceof NumberToken, 'number'), x => ({
+    type: 'n',
+    parent: null,
+    value: parseFloat(x.int + '.' + (x.frac || '0')),
+})));
+const tbool = ctxify(map(match(x => x instanceof BoolToken, 'bool'), x => ({
+    type: 'b',
+    parent: null,
+    value: x.value,
+})));
+const tstring = ctxify(map(match(x => x instanceof StringToken, 'string'), x => ({
+    type: 's',
+    parent: null,
+    value: x.contents,
+})));
 
 const primitive = oneOf(tnull, tbool, tnumber, tstring);
 
@@ -191,12 +216,21 @@ const callExpr = ctxify(map(cat(
     opt(callArgs),
 ), ([a, c]) => {
     if (c.length) {
-        const ex = { type: 'c', func: { type: 'r', name: a.ident }, args: c[0] };
+        const ex = {
+            type: 'c',
+            parent: null,
+            func: {
+                type: 'r',
+                parent: null,
+                name: a.ident,
+            },
+            args: c[0],
+        };
         ex.func.parent = ex;
         for (const arg of c[0]) arg.parent = ex;
         return ex;
     } else {
-        return { type: 'r', name: a.ident };
+        return { type: 'r', parent: null, name: a.ident };
     }
 }));
 
@@ -305,12 +339,14 @@ const closureBody = map(cat(expr, closureWhere), ([e, w], tok) => {
     const body = {
         ctx: tok.ctx,
         type: 'd',
-        defs: new Set(),
+        parent: null,
+        defs: new Set<any>(),
         floatingExpr: new Set(),
     };
     body.defs.add({
         ctx: tok.ctx,
         type: 'ds',
+        parent: null,
         name: '=',
         expr: e,
     });
@@ -320,6 +356,7 @@ const closureBody = map(cat(expr, closureWhere), ([e, w], tok) => {
 });
 const closureExpr = ctxify(map(cat(closureArgs, nbws, arrow, anyws, closureBody), ([p,,,, b]) => ({
     type: 'f',
+    parent: null,
     params: p,
     body: b,
 })));
@@ -328,11 +365,12 @@ const minus = match(x => x instanceof InfixToken && x.ident === '-', 'minus sign
 const unaryMinusExpr = ctxify(map(cat(minus, nbws, nonInfixExpr), ([,, e]) => {
     const ex = {
         type: 'c',
-        func: { type: 'r', name: '-' },
-        args: [{ type: 'n', value: 0 }, e],
+        parent: null,
+        func: { type: 'r', parent: null, name: '-' },
+        args: [{ type: 'n', parent: null, value: 0 }, e],
     };
-    e.parent = ex;
     ex.func.parent = ex;
+    for (const arg of ex.args) arg.parent = ex;
     return ex;
 }));
 
@@ -373,6 +411,7 @@ const infixExpr = ctxify(map(
     ([a,, o,, b]) => {
         const iex = mkInfix({
             type: 'c',
+            parent: null,
             func: mkInfixOp({ type: 'r', name: o.ident }),
             args: [a, b],
             [IS_INFIX]: true,
@@ -415,6 +454,7 @@ function fixPrec (infixExpr) {
                     const iex = mkInfix({
                         ctx: tok.ctx,
                         type: 'c',
+                        parent: null,
                         func: part,
                         args: [pLeft, pRight],
                     });
@@ -443,6 +483,7 @@ const defName = match(x => x instanceof IdentToken, 'definition name');
 const _definition = ctxify(map(cat(defName, anyws, equals, anyws, expr), ([n,,,, e]) => {
     const def = {
         type: 'ds',
+        parent: null,
         name: n.ident,
         expr: e,
     };
@@ -457,7 +498,13 @@ const _program = map(
     cat(anyws, many(map(cat(definition, bws), ([a]) => a)), opt(definition), anyws),
     ([, a, b], tok) => {
         const defs = new Set();
-        const out = { ctx: tok.ctx, type: 'd', defs, floatingExpr: new Set() };
+        const out = {
+            ctx: tok.ctx,
+            type: 'd',
+            parent: null,
+            defs,
+            floatingExpr: new Set(),
+        };
         for (const d of a.concat(b)) {
             defs.add(d);
             d.parent = out;

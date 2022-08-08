@@ -9,23 +9,23 @@
   "license": "ISC",
   "scripts": {
     "prepare": "rollup -c",
-    "watch": "rollup -c --watch"
+    "watch-test": "env NODE_ENV=test rollup -c --watch"
   },
   "devDependencies": {
     "@babel/core": "^7.9.0",
     "@babel/plugin-proposal-class-properties": "^7.8.3",
-    "@rollup/plugin-alias": "^3.1.9",
     "@rollup/plugin-babel": "^5.3.1",
     "@rollup/plugin-commonjs": "^11.0.2",
     "@rollup/plugin-eslint": "^8.0.2",
     "@rollup/plugin-node-resolve": "^7.1.1",
-    "@rollup/plugin-typescript": "^8.3.4",
     "@typescript-eslint/eslint-plugin": "^5.32.0",
     "@typescript-eslint/parser": "^5.32.0",
     "babel-eslint": "^10.1.0",
     "rollup": "^2.77.2",
     "rollup-plugin-eslint": "^7.0.0",
     "rollup-plugin-postcss": "^4.0.2",
+    "rollup-plugin-typescript2": "^0.32.1",
+    "rollup-plugin-web-worker-loader": "^1.6.1",
     "tslib": "^2.4.0"
   },
   "dependencies": {

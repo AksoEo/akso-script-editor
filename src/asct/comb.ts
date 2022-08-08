@@ -2,15 +2,28 @@
 
 export class EOFError extends Error {}
 
-export const cat = (...parsers) => str => parsers.map(parser => parser(str));
-export const tag = (tag, desc = 'tag') => str => {
+export interface Cursor {
+    peek();
+    next();
+    clone(): Cursor;
+    copyFrom(cursor: Cursor);
+    eof(): boolean;
+    regexMatch(re: RegExp): RegExpMatchArray;
+    addErrorToCurrentPos(err: string);
+    getCurrentError(fallback?: string);
+    throw(msg: string);
+}
+export type Parser<T> = (str: Cursor) => T;
+
+export const cat = <T>(...parsers: Parser<T>[]) => (str: Cursor) => parsers.map(parser => parser(str));
+export const tag = (tag: string, desc = 'tag') => (str: Cursor) => {
     for (const c of tag) {
         const d = str.next();
         if (d !== c) str.throw(`failed to parse ${desc}: unexpected ${d}, expected ${c}`);
     }
     return tag;
 };
-export const wrap = (left, right, inner, desc = 'token') => str => {
+export const wrap = <T>(left: string, right: string, inner: Parser<T>, desc = 'token') => (str: Cursor) => {
     const start = str.next();
     if (start !== left) str.throw(`failed to parse ${desc}: unexpected ${start}, expected ${left}`);
 
@@ -21,7 +34,7 @@ export const wrap = (left, right, inner, desc = 'token') => str => {
 
     return data;
 };
-export const oneOf = (...parsers) => str => {
+export const oneOf = <T>(...parsers: Parser<T>[]) => (str: Cursor) => {
     for (const parser of parsers) {
         try {
             const s = str.clone();
@@ -35,7 +48,7 @@ export const oneOf = (...parsers) => str => {
     }
     str.throw(str.getCurrentError('empty oneOf'));
 };
-export const takeUntil = (parser) => str => {
+export const takeUntil = <T>(parser: Parser<T>) => (str: Cursor) => {
     let contents = '';
     while (true) {
         try {
@@ -50,11 +63,11 @@ export const takeUntil = (parser) => str => {
     }
     return contents;
 };
-export const map = (parser, morph) => str => {
+export const map = <T>(parser: Parser<T>, morph) => (str: Cursor) => {
     const result = parser(str);
     return morph(result, str);
 };
-export const regex = (re, desc = 'regex') => str => {
+export const regex = (re: RegExp, desc = 'regex') => (str: Cursor) => {
     const match = str.regexMatch(re);
     if (!match) {
         const peek = str.eof() ? '<EOF>' : str.peek();
@@ -63,7 +76,7 @@ export const regex = (re, desc = 'regex') => str => {
     for (let i = 0; i < match[0].length; i++) str.next();
     return match;
 };
-export const opt = (parser) => str => {
+export const opt = <T>(parser: Parser<T>) => (str: Cursor) => {
     try {
         const s = str.clone();
         const res = parser(s);
@@ -74,12 +87,12 @@ export const opt = (parser) => str => {
         return [];
     }
 };
-export const match = (pred, desc = 'predicate match') => str => {
+export const match = (pred: (s) => boolean, desc = 'predicate match') => (str: Cursor) => {
     const s = str.next();
     if (!(pred(s))) str.throw(`unexpected ${s}, expected ${desc}`);
     return s;
 };
-export const many = (parser) => str => {
+export const many = <T>(parser: Parser<T>) => (str: Cursor) => {
     const items = [];
     while (true) {
         try {
@@ -93,7 +106,7 @@ export const many = (parser) => str => {
     }
     return items;
 };
-export const not = (notParser, parser, desc = 'token') => str => {
+export const not = <T, U>(notParser: Parser<T>, parser: Parser<U>, desc = 'token') => (str: Cursor) => {
     try {
         notParser(str.clone());
     } catch {

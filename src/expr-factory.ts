@@ -1,10 +1,19 @@
 import { View, Transaction, Gesture } from './ui';
 import { ExprView } from './expr-view';
 import { getProtoView } from './proto-pool';
-import { createContext } from './model';
+import { AscContext, createContext, Expr } from './model';
+import { Library } from './library';
+
+export type MakeExprFn = (ctx: AscContext, isDemo?: boolean) => Expr.Any;
 
 export class ExprFactory extends View {
-    constructor (lib, makeExpr) {
+    lib: Library;
+    makeExpr: MakeExprFn;
+    exprCtx: AscContext;
+    expr: Expr.Any;
+    exprView: ExprView;
+
+    constructor (lib: Library, makeExpr: MakeExprFn) {
         super();
         this.lib = lib;
         this.makeExpr = makeExpr;
@@ -39,11 +48,9 @@ export class ExprFactory extends View {
         this.layer.size = this.exprView.size;
     }
 
-    #dragStartPos = [0, 0];
     #createdDragRef = null;
 
     onDragStart = ({ absX, absY }) => {
-        this.#dragStartPos = [absX, absY];
         this.#createdDragRef = this.createInstance();
         const t = new Transaction(1, 0.3);
         this.lib.defs.dragController.beginExprDrag(this.#createdDragRef, absX, absY);

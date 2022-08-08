@@ -29,10 +29,7 @@ export default class Editor {
 
         this.root.node.appendChild(this.codeEditor.node);
         this.root.ctx.codeMirrorNode = this.codeEditor.node;
-        Object.defineProperty(this.root.ctx, 'codeMirror', {
-            get: () => this.codeEditor.get(),
-            enumerable: true,
-        });
+        this.root.ctx.codeEditor = this.codeEditor;
     }
 
     get node () {

@@ -1,5 +1,6 @@
 import { Window, View, Layer, TextLayer, PathLayer, Transaction, Gesture } from './ui';
 import config from './config';
+import { InputCapture, PushedWindow } from './ui/context';
 
 /// A dropdown.
 ///
@@ -7,6 +8,22 @@ import config from './config';
 /// - expr: { value: string, ctx }
 /// - spec: { variants: { [value]: label } }
 export class Dropdown extends View {
+    anchorView: View;
+    anchorLayer: Layer;
+    bgLayer: Layer;
+    highlightLayer: Layer;
+    iconLayer: PathLayer;
+    labels: Map<string, TextLayer>;
+    anchored: boolean;
+
+    worldAnchor: PushedWindow | null = null;
+    capture: InputCapture | null = null;
+    hitWidth = 0;
+    hovering = false;
+    dragStart: [number, number] | null = null;
+    lastLocation: [number, number] | null = null;
+    didDragSelect = false;
+
     constructor (expr, spec) {
         super();
 
@@ -46,7 +63,7 @@ export class Dropdown extends View {
 
     #expr;
     #spec;
-    #hasTentativeChild = false;
+    #hasTentativeChild: View | null = null;
     #expanded = false;
 
     get expr () {

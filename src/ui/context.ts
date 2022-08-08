@@ -1,6 +1,7 @@
 import { View } from './view';
 import { BaseLayer, Transaction } from './layer/base';
 import { Window } from './window';
+import { CodeEditor } from '../code-editor';
 
 export interface ViewContext {
     render: {
@@ -18,6 +19,7 @@ export interface ViewContext {
         style?: { [k: string]: string },
     ) => Promise<string>);
     codeMirrorNode: HTMLElement | null;
+    codeEditor?: CodeEditor | null;
     window?: Window;
 }
 

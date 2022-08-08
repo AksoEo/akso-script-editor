@@ -1,20 +1,18 @@
-import typescript from '@rollup/plugin-typescript';
+import typescript2 from 'rollup-plugin-typescript2';
 import babel from '@rollup/plugin-babel';
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import postcss from 'rollup-plugin-postcss';
-import alias from '@rollup/plugin-alias';
+import workerLoader from 'rollup-plugin-web-worker-loader';
 import { eslint } from 'rollup-plugin-eslint';
+
+const isTestEnv = process.env.NODE_ENV === 'test';
 
 const inputOptions = {
     input: 'src/index.ts',
     plugins: [
         postcss(),
-        alias({
-            entries: [
-                { find: '@tejo/akso-script', replacement: '@tejo/akso-script/dist-esm' },
-            ],
-        }),
+        workerLoader({ extensions: ['.js', '.ts'] }),
         eslint({
             throwOnError: true,
             include: ['src/**'],
@@ -34,17 +32,22 @@ const inputOptions = {
                 'no-const-assign': 'error',
             },
         }),
-        typescript(),
-        babel({
-            plugins: ['@babel/plugin-proposal-class-properties'],
-            exclude: ['node_modules/**'],
-        }),
         resolve(),
         commonjs({
             namedExports: {
                 'google-libphonenumber': ['PhoneNumberUtil', 'PhoneNumberFormat'],
             }
         }),
+        typescript2(),
+        babel({
+            plugins: ['@babel/plugin-proposal-class-properties'],
+            exclude: ['node_modules/**'],
+        }),
+    ],
+    external: isTestEnv ? [] : [
+        'google-libphonenumber',
+        '@tejo/akso-script',
+        'codemirror',
     ],
 };
 const outputOptions = {

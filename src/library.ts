@@ -88,20 +88,31 @@ export class Library extends View {
     createTab (tab) {
         if (tab.id === 'primitives') {
             tab.itemList.items = [
-                new ExprFactory(this, ctx => ({ ctx, type: 'u' })),
-                new ExprFactory(this, ctx => ({ ctx, type: 'b', value: true })),
-                new ExprFactory(this, ctx => ({ ctx, type: 'n', value: 0 })),
-                new ExprFactory(this, ctx => ({ ctx, type: 's', value: '' })),
-                new ExprFactory(this, ctx => ({ ctx, type: 'm', value: [] })),
-                new ExprFactory(this, ctx => ({ ctx, type: 'r', name: '' })),
-                new ExprFactory(this, ctx => ({ ctx, type: 'l', items: [] })),
-                new ExprFactory(this, ctx => ({ ctx, type: 'f', params: [], body: {
-                    ctx,
-                    type: 'd',
-                    defs: new Set(),
-                    floatingExpr: new Set(),
-                } })),
-                new ExprFactory(this, ctx => ({ ctx, type: 'w', matches: [] })),
+                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'u' })),
+                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'b', value: true })),
+                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'n', value: 0 })),
+                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 's', value: '' })),
+                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'm', value: [] })),
+                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'r', name: '' })),
+                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'l', items: [] })),
+                new ExprFactory(this, ctx => {
+                    const expr: Expr.FnDef = {
+                        ctx,
+                        parent: null,
+                        type: 'f',
+                        params: [],
+                        body: {
+                            ctx,
+                            parent: null,
+                            type: 'd',
+                            defs: new Set(),
+                            floatingExpr: new Set(),
+                        },
+                    };
+                    expr.body.parent = expr;
+                    return expr;
+                }),
+                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'w', matches: [] })),
             ];
             tab.itemList.needsLayout = true;
         } else if (tab.id === 'stdlib') {
@@ -111,12 +122,23 @@ export class Library extends View {
                 const category = config.stdlibCategories[categoryName];
                 tab.itemList.items.push(new SectionHeader(config.stdlibCategoryNames[categoryName]));
                 for (const id of category) {
-                    tab.itemList.items.push(new ExprFactory(this, ctx => ({
-                        ctx,
-                        type: 'c',
-                        func: { ctx, type: 'r', name: id, refNode: stdRefs.get(id) },
-                        args: [],
-                    })));
+                    tab.itemList.items.push(new ExprFactory(this, ctx => {
+                        const expr: Expr.Call = {
+                            ctx,
+                            parent: null,
+                            type: 'c',
+                            func: {
+                                ctx,
+                                parent: null,
+                                type: 'r',
+                                name: id,
+                                refNode: stdRefs.get(id),
+                            },
+                            args: [],
+                        };
+                        expr.func.parent = expr;
+                        return expr;
+                    }));
                 }
             }
             tab.itemList.needsLayout = true;
@@ -144,7 +166,7 @@ export class Library extends View {
                     if (name !== state.name) {
                         state.name = name;
                         if (!state.refExpr) {
-                            state.refExpr = new ExprFactory(this, ctx => ({ ctx, type: 'r', name }));
+                            state.refExpr = new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'r', name }));
                         } else {
                             state.refExpr.update(ctx => ({ ctx, type: 'r', name }));
                         }
@@ -165,7 +187,7 @@ export class Library extends View {
                 if (name !== state.name) {
                     state.name = name;
                     if (!state.refExpr) {
-                        state.refExpr = new ExprFactory(this, ctx => ({ ctx, type: 'r', name }));
+                        state.refExpr = new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'r', name }));
                     } else {
                         state.refExpr.update(ctx => ({ ctx, type: 'r', name }));
                     }

@@ -280,6 +280,7 @@ export class ExprView extends View {
     decorationOnly = false;
     dragController: IExprDragController | null = null;
 
+    _isDemo?: boolean;
     isDef?: boolean;
     onDefRename?: ((name: string) => void);
 

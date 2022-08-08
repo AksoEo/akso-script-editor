@@ -156,7 +156,7 @@ export namespace Expr {
         type: 's';
         value: string;
     }
-    export type MatrixValue = null | number | string | MatrixValue[];
+    export type MatrixValue = null | boolean | number | string | MatrixValue[];
     export interface Matrix extends BaseExpr {
         type: 'm';
         value: MatrixValue;
@@ -887,4 +887,107 @@ export function evalExpr (expr: Expr.Any) {
         result,
         analysis,
     };
+}
+
+export function cloneWithContext (node: AnyNode, ctx: AscContext, clearParents?: boolean): AnyNode {
+    if (node.type === NODE_NULL) {
+        return {
+            type: node.type,
+            parent: null,
+            ctx,
+        };
+    } else if (node.type === NODE_BOOL
+        || node.type === NODE_NUM
+        || node.type === NODE_STR
+        || node.type === NODE_MAT) {
+        return {
+            type: node.type,
+            ctx,
+            parent: null,
+            value: node.value,
+        } as any;
+    } else if (node.type === NODE_LIST) {
+        const expr: Expr.List = {
+            type: node.type,
+            parent: null,
+            ctx,
+            items: node.items.map(item => cloneWithContext(item, ctx, clearParents) as Expr.Any),
+        };
+        if (!clearParents) {
+            for (const item of expr.items) item.parent = expr;
+        }
+        return expr;
+    } else if (node.type === NODE_CALL) {
+        const expr: Expr.Call = {
+            type: node.type,
+            parent: null,
+            ctx,
+            func: cloneWithContext(node.func, ctx, clearParents) as Expr.Any,
+            args: node.args.map(item => cloneWithContext(item, ctx, clearParents) as Expr.Any),
+        };
+        if (!clearParents) {
+            expr.func.parent = expr;
+            for (const arg of expr.args) arg.parent = expr;
+        }
+        return expr;
+    } else if (node.type === NODE_SWITCH) {
+        const expr: Expr.Switch = {
+            type: node.type,
+            parent: null,
+            ctx,
+            matches: node.matches.map(({ cond, value }) => {
+                return {
+                    cond: cond ? cloneWithContext(cond, ctx, clearParents) as Expr.Any : cond,
+                    value: cloneWithContext(value, ctx, clearParents) as Expr.Any,
+                };
+            }),
+        };
+        if (!clearParents) {
+            for (const m of expr.matches) {
+                if (m.cond) m.cond.parent = expr;
+                m.value.parent = expr;
+            }
+        }
+        return expr;
+    } else if (node.type === NODE_REF) {
+        return {
+            type: node.type,
+            parent: null,
+            ctx,
+            name: node.name,
+        };
+    } else if (node.type === NODE_FNDEF) {
+        const expr: Expr.FnDef = {
+            type: node.type,
+            parent: null,
+            ctx,
+            params: node.params,
+            body: cloneWithContext(node.body, ctx, clearParents) as Defs,
+        };
+        if (!clearParents) expr.body.parent = expr;
+        return expr;
+    } else if (node.type === NODE_DEF) {
+        const def: Def = {
+            type: node.type,
+            parent: null,
+            ctx,
+            name: node.name,
+            expr: cloneWithContext(node.expr, ctx, clearParents) as Expr.Any,
+        };
+        if (!clearParents) def.expr.parent = def;
+        return def;
+    } else if (node.type === NODE_DEFS) {
+        const defs: Defs = {
+            type: node.type,
+            parent: null,
+            ctx,
+            defs: new Set([...node.defs].map(item => cloneWithContext(item, ctx, clearParents) as Def)),
+            floatingExpr: new Set([...node.floatingExpr].map(item => cloneWithContext(item, ctx, clearParents) as Expr.Any)),
+        };
+        if (!clearParents) {
+            for (const def of defs.defs) def.parent = defs;
+            for (const expr of defs.floatingExpr) expr.parent = defs;
+        }
+        return defs;
+    }
 }

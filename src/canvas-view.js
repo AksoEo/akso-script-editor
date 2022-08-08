@@ -1,5 +1,13 @@
 import { View, Transaction } from './ui';
-import { createContext, fromRawDefs, toRawDefs, fromRawExpr, toRawExpr, resolveRefs } from './model';
+import {
+    createContext,
+    fromRawDefs,
+    toRawDefs,
+    fromRawExpr,
+    toRawExpr,
+    resolveRefs,
+    cloneWithContext,
+} from './model';
 import { viewPool } from './proto-pool';
 import { DefsView } from './defs-view';
 import { Library } from './library';
@@ -118,25 +126,32 @@ export class CanvasView extends View {
         const code = write(this.defsView.defs);
         this.ctx.codeMirrorNode.style.display = '';
         this.isInCodeMode = true;
-        this.ctx.codeMirror.setValue(code);
+        this.ctx.codeEditor.get().setValue(code);
+        this.ctx.codeEditor.onAsctChange = this.onCodeMirrorAsctChange;
     }
+    onCodeMirrorAsctChange = (data) => {
+        if (!this.isInCodeMode) return;
+        const parsed = cloneWithContext(data, this.modelCtx);
+
+        this.root = parsed;
+        this.resolveRefs();
+        this.needsLayout = true;
+        setTimeout(() => {
+            // hack to fix arrows in graph view
+            this.defsView.needsLayout = true;
+        }, 10);
+    };
     exitCodeMode () {
-        const code = this.ctx.codeMirror.getValue();
+        const code = this.ctx.codeEditor.get().getValue();
         try {
-            const parsed = parse(lex(code), this.modelCtx);
-
-            this.root = parsed;
-            this.resolveRefs();
-            this.needsLayout = true;
-            setTimeout(() => {
-                // hack to fix arrows in graph view
-                this.defsView.needsLayout = true;
-            }, 10);
-
+            const data = parse(lex(code), this.modelCtx);
+            this.onCodeMirrorAsctChange(data);
             this.ctx.codeMirrorNode.style.display = 'none';
             this.isInCodeMode = false;
+
+            this.modelCtx.notifyMutation(this.root);
         } catch (err) {
-            // TODO: show error
+            // error will be shown in code editor
             console.error(err);
         }
     }
