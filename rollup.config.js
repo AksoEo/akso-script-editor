@@ -12,7 +12,7 @@ const inputOptions = {
     input: 'src/index.ts',
     plugins: [
         postcss(),
-        workerLoader({ extensions: ['.js', '.ts'] }),
+        workerLoader({ targetPlatform: 'browser', extensions: ['.js', '.ts'] }),
         eslint({
             throwOnError: true,
             include: ['src/**'],
@@ -48,6 +48,7 @@ const inputOptions = {
         'google-libphonenumber',
         '@tejo/akso-script',
         'codemirror',
+        'codemirror/addon/mode/simple',
     ],
 };
 const outputOptions = {
