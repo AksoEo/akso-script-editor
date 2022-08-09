@@ -260,9 +260,17 @@ const matrixExpr = ctxify(map(group(BracketsToken, matrixInner), items => {
             isPure = false;
         }
     }
-    if (isPure) return { type: 'm', value: items.map(item => item.value) };
-    else {
-        const ex = { type: 'l', items };
+    if (isPure) {
+        return {
+            type: 'm',
+            parent: null,
+            value: items.map(item => {
+                if (item.type === 'u') return null;
+                return item.value;
+            }),
+        };
+    } else {
+        const ex = { type: 'l', parent: null, items };
         for (const item of items) item.parent = ex;
         return ex;
     }
@@ -302,7 +310,7 @@ const switchContents = oneOf(
     map(cat(nbws, lastSwitchCase), ([, c]) => [c]),
 );
 const switchExpr = ctxify(map(cat(switchIdent, switchContents), ([, m]) => {
-    const ex = { type: 'w', matches: m };
+    const ex = { type: 'w', parent: null, matches: m };
     for (const { cond, value } of m) {
         if (cond) cond.parent = ex;
         value.parent = ex;
