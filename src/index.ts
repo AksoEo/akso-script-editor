@@ -2,6 +2,7 @@ import { Window, ViewRoot, RenderViewRoot } from './ui';
 import { EditorView } from './editor-view';
 import { CodeEditor } from './code-editor';
 import { TextInput } from './text-input';
+import { HelpSheet } from './help/help-sheet';
 export { lex } from './asct/lex';
 export { parse } from './asct/parse';
 export { write } from './asct/write';
@@ -18,6 +19,7 @@ export default class Editor {
     editor = new EditorView();
     textInput = new TextInput();
     codeEditor = new CodeEditor();
+    helpSheet: HelpSheet;
 
     constructor () {
         const win = new Window();
@@ -30,6 +32,10 @@ export default class Editor {
         this.root.node.appendChild(this.codeEditor.node);
         this.root.ctx.codeMirrorNode = this.codeEditor.node;
         this.root.ctx.codeEditor = this.codeEditor;
+
+        this.helpSheet = new HelpSheet(this.editor);
+        this.root.node.appendChild(this.helpSheet.node);
+        this.root.ctx.helpSheet = this.helpSheet;
     }
 
     get node () {

@@ -10,7 +10,7 @@ export class Toolbar extends View {
         this.buttons = [
             new Button(config.toolbar.buttons.code, this.toggleCodeView),
             new Button(config.toolbar.buttons.graph, this.toggleGraphView),
-            new Button(config.toolbar.buttons.help, () => {}),
+            new Button(config.toolbar.buttons.help, this.toggleHelp),
         ];
 
         this.fileButtons = [
@@ -39,6 +39,21 @@ export class Toolbar extends View {
             this.canvas.enterCodeMode();
         }
     };
+
+    toggleHelp = (helpButton) => {
+        const enabled = this.canvas.isInHelpMode;
+        helpButton.active = !enabled;
+        if (enabled) {
+            this.canvas.exitHelpMode();
+        } else {
+            this.canvas.enterHelpMode();
+        }
+        // kinda janky...
+        this.ctx.helpSheet.onClose = () => {
+            helpButton.active = false;
+            this.canvas.isInHelpMode = false;
+        };
+    }
 
     save = () => this.editor.onSave();
 

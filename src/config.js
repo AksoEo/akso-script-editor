@@ -1,3 +1,5 @@
+import { infixIdentRegexF } from './asct/shared';
+
 const fontStack = '"Avenir Next", "Museo Sans", Roboto, "Helvetica Neue", Ubuntu, Cantarell, sans-serif';
 
 const dateUnits = {
@@ -29,7 +31,7 @@ const timestampUnits = {
     y: 'jaroj',
 };
 
-export default {
+const config = {
     cornerRadius: 4,
 
     sectionFont: '500 18px ' + fontStack,
@@ -369,7 +371,6 @@ export default {
         trunc: 'trunc',
         sign: 'sgn',
         abs: '|n|',
-        if: 'se',
         '==': 'x=y',
         '!=': 'x≠y',
         '>': 'x>y',
@@ -390,6 +391,8 @@ export default {
         index: 'je indekso',
         length: 'longeco',
         contains: 'enhavas',
+        head: '[[head]]',
+        tail: '[[tail]]',
         sort: 'ordigi',
         sum: 'sumo',
         min: 'minimumo',
@@ -513,5 +516,319 @@ export default {
                 },
             },
         ],
+    },
+};
+export default config;
+
+const hNodes = {
+    ref(name) {
+        return {
+            type: 'r',
+            name,
+            refNode: {
+                type: 'ds',
+                name,
+                expr: { type: 'u' },
+            },
+        };
+    },
+    refStdlib(name) {
+        return {
+            type: 'r',
+            name,
+            refNode: {
+                type: 'ds',
+                name,
+                isStdlib: true,
+                expr: {
+                    type: 'f',
+                    body: {},
+                    params: config.stdlibArgs[name] || [],
+                    infix: !!name.match(infixIdentRegexF),
+                    slots: config.stdlibSlots[name],
+                },
+                nameOverride: config.stdlibNames[name],
+            },
+        };
+    },
+    call(f, ...args) {
+        return { type: 'c', func: f, args };
+    },
+    str(value) {
+        return { type: 's', value };
+    },
+    bool(value) {
+        return { type: 'b', value };
+    },
+    num(value) {
+        return { type: 'n', value };
+    },
+    mat(value) {
+        return { type: 'm', value };
+    },
+    list(...items) {
+        return { type: 'l', items };
+    }
+};
+
+const stdlibDocs = {
+    '+': [{ type: 'text', content: '[[Adds two numbers together. If the inputs aren’t numbers, it will return null.]]' }],
+    '-': [{ type: 'text', content: '[[Subtracts two numbers. If the inputs aren’t numbers, it will return null.]]' }],
+    '*': [{ type: 'text', content: '[[Multiplies two numbers. If the inputs aren’t numbers, it will return null.]]' }],
+    '/': [{ type: 'text', content: '[[Divides two numbers. If the inputs aren’t numbers, it will return null.]]' }],
+    '^': [{ type: 'text', content: '[[Computes the exponentiation of two numbers. If the inputs aren’t numbers, it will return null.]]' }],
+    mod: [{ type: 'text', content: '[[Returns the mathematical modulo of two numbers. If the inputs aren’t numbers, it will return null.]]' }],
+    floor: [{ type: 'text', content: '[[Returns the closest whole number towards -Infinity. If the input isn’t a number, it will return null.]]' }],
+    ceil: [{ type: 'text', content: '[[Returns the closest whole number towards +Infinity. If the input isn’t a number, it will return null.]]' }],
+    round: [{ type: 'text', content: '[[Returns the closest whole number. If the input isn’t a number, it will return null.]]' }],
+    trunc: [{ type: 'text', content: '[[Removes any fractional part of the number (e.g. 3.14 → 3, -3.14 → -3). If the input isn’t a number, it will return null.]]' }],
+    sign: [{ type: 'text', content: '[[Returns 1, 0, or -1 depending on whether the number is positive, zero, or negative. If the input isn’t a number, it will return null.]]' }],
+    abs: [{ type: 'text', content: '[[Returns the absolute value of a number, i.e. removing any negative signs. If the input isn’t a number, it will return null.]]' }],
+    '==': [
+        { type: 'text', content: '[[Compares two values. If they are the same, it will return]]' },
+        { type: 'node', node: hNodes.bool(true) },
+        { type: 'text', content: '[[and otherwise]]' },
+        { type: 'node', node: hNodes.bool(false) },
+    ],
+    '!=': [
+        { type: 'text', content: '[[Compares two values. If they are *not* the same, it will return]]' },
+        { type: 'node', node: hNodes.bool(true) },
+        { type: 'text', content: '[[If they are the same, it will return]]' },
+        { type: 'node', node: hNodes.bool(false) },
+    ],
+    '>': [
+        { type: 'text', content: '[[Compares two numbers. If the first is larger than the second, it will return]]' },
+        { type: 'node', node: hNodes.bool(true) },
+        { type: 'text', content: '[[and otherwise]]' },
+        { type: 'node', node: hNodes.bool(false) },
+    ],
+    '<': [
+        { type: 'text', content: '[[Compares two numbers. If the first is smaller than the second, it will return]]' },
+        { type: 'node', node: hNodes.bool(true) },
+        { type: 'text', content: '[[and otherwise]]' },
+        { type: 'node', node: hNodes.bool(false) },
+    ],
+    '>=': [
+        { type: 'text', content: '[[Compares two numbers. If the first is larger or equal to the second, it will return]]' },
+        { type: 'node', node: hNodes.bool(true) },
+        { type: 'text', content: '[[and otherwise]]' },
+        { type: 'node', node: hNodes.bool(false) },
+    ],
+    '<=': [
+        { type: 'text', content: '[[Compares two numbers. If the first is smaller or equal to the second, it will return]]' },
+        { type: 'node', node: hNodes.bool(true) },
+        { type: 'text', content: '[[and otherwise]]' },
+        { type: 'node', node: hNodes.bool(false) },
+    ],
+    and: [
+        { type: 'text', content: '[[Combines two booleans. Returns yes only if both are yes.]]' },
+        { type: 'text', content: 'yes, yes -> yes' },
+        { type: 'text', content: 'yes, no -> no' },
+        { type: 'text', content: 'no, yes -> no' },
+        { type: 'text', content: 'no, no -> no' },
+    ],
+    or: [
+        { type: 'text', content: '[[Combines two booleans. Returns yes if either is yes.]]' },
+        { type: 'text', content: 'yes, yes -> yes' },
+        { type: 'text', content: 'yes, no -> yes' },
+        { type: 'text', content: 'no, yes -> yes' },
+        { type: 'text', content: 'no, no -> no' },
+    ],
+    not: [
+        { type: 'text', content: '[[Inverts a boolean. Returns yes for no and no for yes.]]' },
+    ],
+    xor: [
+        { type: 'text', content: '[[Compares two booleans. Returns yes if they are different.]]' },
+        { type: 'text', content: 'yes, yes -> no' },
+        { type: 'text', content: 'no, yes -> yes' },
+        { type: 'text', content: 'yes, no -> yes' },
+        { type: 'text', content: 'no, no -> no' },
+    ],
+    id: [
+        { type: 'text', content: '[[Identity function: returns its input without doing anything.]]' },
+    ],
+    '++': [
+        { type: 'text', content: '[[Adds two lists or strings together. You can use this to combine values with text:]]' },
+        {
+            type: 'node',
+            node: hNodes.call(hNodes.refStdlib('++'),
+                hNodes.str('valuto: '),
+                hNodes.ref('valuto')),
+        },
+        { type: 'text', content: '[[or to combine lists or matrices:]]' },
+        {
+            type: 'node',
+            node: hNodes.call(hNodes.refStdlib('++'),
+                hNodes.mat([1, 2]),
+                hNodes.list(hNodes.num(3))),
+        },
+    ],
+    map: [{ type: 'text', content: '[[Applies a function on each element of an input. ??]]' }],
+    flat_map: [{ type: 'text', content: '[[Applies a function on each element of an input and combines the results into one list.]]' }],
+    fold: [{ type: 'text', content: '[[Reduces a list to one value. ??]]' }],
+    fold1: [{ type: 'text', content: '[[Reduces a list to one value. ??]]' }],
+    filter: [{ type: 'text', content: '[[Filters a list using a function. ??]]' }],
+    index: [
+        { type: 'text', content: '[[Returns a single item from a list, by index. Indices start at zero. For example, to get the second item of a list (5):]]' },
+        {
+            type: 'node',
+            node: hNodes.call(hNodes.refStdlib('index'),
+                hNodes.mat([3, 5]),
+                hNodes.num(1)),
+        },
+    ],
+    length: [
+        { type: 'text', content: '[[Returns the length of a list or string.]]' },
+    ],
+    contains: [
+        { type: 'text', content: '[[Returns yes or no depending on whether the list contains the item.]]' },
+    ],
+    head: [
+        { type: 'text', content: '[[Returns the first N items of a list, or first N characters of a string.]]' },
+    ],
+    tail: [
+        { type: 'text', content: '[[Returns the last N items of a list, or last N characters of a tsring.]]' },
+    ],
+    sort: [
+        { type: 'text', content: '[[Sorts the list in ascending order.]]' },
+    ],
+    sum: [
+        { type: 'text', content: '[[Returns the sum of the input list.]]' },
+    ],
+    min: [
+        { type: 'text', content: '[[Returns the minimum value in the input list.]]' },
+    ],
+    max: [
+        { type: 'text', content: '[[Returns the maximum value in the input list.]]' },
+    ],
+    avg: [
+        { type: 'text', content: '[[Returns the arithmetic mean of the input list.]]' },
+    ],
+    med: [
+        { type: 'text', content: '[[Returns the median value of the input list.]]' },
+    ],
+    date_sub: [
+        { type: 'text', content: '[[Subtracts two dates and returns the difference in the desired unit. Returns null if the inputs aren’t dates.]]' },
+    ],
+    date_add: [
+        { type: 'text', content: '[[Adds a duration to a date.]]' },
+    ],
+    date_today: [{ type: 'text', content: '[[Returns today’s date.]]' }],
+    date_fmt: [{ type: 'text', content: '[[Formats the date into a human-readable string in Esperanto.]]' }],
+    date_get: [{ type: 'text', content: '[[Returns the desired property of the input date, or null if the input is not a date.]]' }],
+    date_set: [{ type: 'text', content: '[[Returns a new date with the desired property changed, or returns null if the input is not a date.]]' }],
+    ts_now: [{ type: 'text', content: '[[Returns the current timestamp.]]' }],
+    tz_utc: [{ type: 'text', content: '[[Returns the UTC timezone offset in minutes (always 0).]]' }],
+    tz_local: [{ type: 'text', content: '[[Returns the local timezone offset in minutes from UTC.]]' }],
+    ts_from_unix: [{ type: 'text', content: '[[Converts a unix epoch time number to a timestamp.]]' }],
+    ts_to_unix: [{ type: 'text', content: '[[Converts a timestamp to a unix epoch time number.]]' }],
+    ts_from_date: [{ type: 'text', content: '[[Creates a timestamp from a date and a time.]]' }],
+    ts_get: [{ type: 'text', content: '[[Returns the desired property of the input timestamp.]]' }],
+    ts_set: [{ type: 'text', content: '[[Returns a new timestamp with the desired property changed.]]' }],
+    ts_add: [{ type: 'text', content: '[[Adds a time quantity to a timestamp and returns the result.]]' }],
+    ts_sub: [{ type: 'text', content: '[[Subtracts a time quanitty from a timestamp and returns the result.]]' }],
+    ts_to_date: [{ type: 'text', content: '[[Returns the date portion of a timestam.]]' }],
+    ts_parse: [{ type: 'text', content: '[[Parses a timestamp from a string in a format like 2022-05-18T13:44:02Z]]' }],
+    ts_to_string: [{ type: 'text', content: '[[Converts a timestamp to a string in a format like 2022-05-18T13:44:02Z.]]' }],
+    ts_fmt: [{ type: 'text', content: '[[Formats a timestamp into a human-readable string in Esperanto.]]' }],
+    currency_fmt: [{ type: 'text', content: '[[Formats the currency value into a human-readable string like “6,24 USD.” Note that for all currencies except JPY, the input value must be in cents!]]' }],
+    country_fmt: [{ type: 'text', content: '[[Returns the country name, given a two-letter country code like NL.]]' }],
+    phone_fmt: [{ type: 'text', content: '[[Formats a phone-number with spacing, given input like +3112345678]]' }],
+};
+
+export const helpContent = {
+    background: '#eee',
+    foreground: 'black',
+    highlight: [0.8, 0.5, 0.3, 1],
+    title: 'Helpo',
+    font: '500 16px ' + fontStack,
+
+    default: [{
+        type: 'text',
+        content: '[[Hover over or click a highlighted item to learn more.]]',
+    }],
+    'expr': [{ type: 'text', content: '[[Error: empty expression]]' }],
+    'expr.u': [{
+        type: 'text',
+        content: '[[A null expression represents the absence of a value.]]',
+    }],
+    'expr.b': [{
+        type: 'text',
+        content: '[[A boolean expression represents a truthfulness value: yes or no. Click to swap the value.]]',
+    }],
+    'expr.n': [{
+        type: 'text',
+        content: '[[A number. Click to edit the value.]]',
+    }],
+    'expr.s': [{
+        type: 'text',
+        content: '[[A piece of text. Click to edit the value. You can use the ++ function:]]',
+    }, {
+        type: 'node',
+        node: hNodes.call(
+            hNodes.refStdlib('++'),
+            hNodes.str('valuto: '),
+            hNodes.ref('valuto')),
+    }, {
+        type: 'text',
+        content: '[[to combine text with other values.]]',
+    }],
+    'expr.m': [{
+        type: 'text',
+        content: '[[A matrix value stores a spreadsheet or something.]]',
+    }],
+    'expr.r': [{
+        type: 'text',
+        content: '[[A reference represents the value of another definition. Click to edit the name that this is referencing.]]',
+    }],
+    'expr.r.def': [{
+        type: 'text',
+        content: '[[The name of a definition. Drag this to get a new reference to this definition. The reference will represent its value.]]',
+    }],
+    'expr.l': [{
+        type: 'text',
+        content: '[[Creates a list of values. ??]]',
+    }],
+    'expr.f': [{
+        type: 'text',
+        content: '[[Declares a function.]]',
+    }],
+    'expr.w': [{
+        type: 'text',
+        content: '[[A switch allows you to evaluate to a different value depending on certain conditions.]]',
+    }, {
+        type: 'node',
+        node: {
+            type: 'w',
+            matches: [
+                {
+                    cond: hNodes.call(hNodes.refStdlib('=='),
+                        hNodes.ref('valuto'),
+                        hNodes.str('a')),
+                    value: hNodes.str('valuto 1'),
+                },
+                {
+                    cond: hNodes.call(hNodes.refStdlib('=='),
+                        hNodes.ref('valuto'),
+                        hNodes.str('b')),
+                    value: hNodes.str('valuto 2'),
+                },
+                {
+                    cond: null,
+                    value: hNodes.str('valuto 3'),
+                },
+            ],
+        },
+    }],
+    'expr.c': (expr) => {
+        if (expr.func.type === 'r' && expr.func.refNode?.isStdlib) {
+            return stdlibDocs[expr.func.name];
+        } else if (expr.func.type === 'r') {
+            return [{
+                type: 'text',
+                content: `[[This is a call to the function ${expr.func.name}]]`,
+            }];
+        }
+        return [];
     },
 };

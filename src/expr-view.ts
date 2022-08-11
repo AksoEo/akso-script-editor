@@ -9,6 +9,7 @@ import { ValueView } from './value-view';
 import { DragController, DragSlot, IExprDragController } from './drag-controller';
 import config from './config';
 import { BaseLayer } from './ui/layer/base';
+import { HelpTagged } from './help/help-tag';
 
 type OnInsertExpr = (expr: Expr.Any) => void;
 
@@ -261,7 +262,7 @@ class PeekView extends View {
 }
 
 /// Renders a single expression.
-export class ExprView extends View {
+export class ExprView extends View implements HelpTagged {
     wantsChildLayout = true;
     expr: Expr.Any;
     impl$tapAction: (() => void) | null = null;
@@ -313,6 +314,13 @@ export class ExprView extends View {
         }
         if (this.impl$init) this.impl$init();
         this.needsLayout = true;
+    }
+
+    get helpTag() {
+        if (this.expr.type === 'r' && this.isDef) {
+            return { id: 'expr.r.def', args: [this.expr] };
+        }
+        return { id: 'expr.' + this.implType, args: [this.expr] };
     }
 
     layout () {

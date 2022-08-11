@@ -7,6 +7,7 @@ import { ExprSlot, ExprView } from './expr-view';
 import { ValueView } from './value-view';
 import { AscContext, Def, Defs, evalExpr, Expr, remove as removeNode } from './model';
 import { DragController } from './drag-controller';
+import { HelpTagged } from './help/help-tag';
 
 type Arrows = Map<Def, Map<Expr.Any, ArrowLayer>>;
 
@@ -753,10 +754,12 @@ export class DefView extends View {
     }
 }
 
-class DefValueView extends View {
+class DefValueView extends View implements HelpTagged {
     arrowLayer: ArrowLayer;
     inner: ValueView;
     loading = false;
+
+    helpHidden = true;
 
     constructor () {
         super();

@@ -2,6 +2,7 @@ import { View } from './view';
 import { BaseLayer, Transaction } from './layer/base';
 import { Window } from './window';
 import { CodeEditor } from '../code-editor';
+import { HelpSheet } from '../help/help-sheet';
 
 export interface ViewContext {
     render: {
@@ -21,6 +22,7 @@ export interface ViewContext {
     codeMirrorNode: HTMLElement | null;
     codeEditor?: CodeEditor | null;
     window?: Window;
+    helpSheet?: HelpSheet;
 }
 
 export interface InputCapture {

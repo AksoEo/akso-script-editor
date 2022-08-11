@@ -155,6 +155,16 @@ export class CanvasView extends View {
         }
     }
 
+    isInHelpMode = false;
+    enterHelpMode() {
+        this.isInHelpMode = true;
+        this.ctx.helpSheet.open();
+    }
+    exitHelpMode() {
+        this.isInHelpMode = false;
+        this.ctx.helpSheet.close();
+    }
+
     getSubCtx () {
         return {
             modelCtx: this.modelCtx,
@@ -182,9 +192,14 @@ export class CanvasView extends View {
         this.defsView.needsLayout = true;
 
         const absPos = this.absolutePosition;
-        this.ctx.codeMirrorNode.style.transform = `translate(${absPos[0]}px, ${absPos[1]}px)`;
-        this.ctx.codeMirrorNode.style.width = this.size[0] + 'px';
-        this.ctx.codeMirrorNode.style.height = this.size[1] + 'px';
+        if (this.ctx.codeMirrorNode) {
+            this.ctx.codeMirrorNode.style.transform = `translate(${absPos[0]}px, ${absPos[1]}px)`;
+            this.ctx.codeMirrorNode.style.width = this.size[0] + 'px';
+            this.ctx.codeMirrorNode.style.height = this.size[1] + 'px';
+        }
+        if (this.ctx.helpSheet) {
+            this.ctx.helpSheet.node.style.top = absPos[1] + 'px';
+        }
     }
 
     /// Loads a raw asc root node.

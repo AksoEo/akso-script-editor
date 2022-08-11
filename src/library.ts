@@ -6,9 +6,10 @@ import { Scrollbar } from './scrollbar';
 import { initFormVarsTab } from './form-vars';
 import { DefsView } from './defs-view';
 import config from './config';
+import { HelpTagged } from './help/help-tag';
 
 /// This is the library of objects on the left-hand side.
-export class Library extends View {
+export class Library extends View implements HelpTagged {
     defs: DefsView;
     layer: Layer;
     sideTabs: SideTabs;
@@ -49,6 +50,10 @@ export class Library extends View {
 
     get isOpen () {
         return !!this.selected;
+    }
+
+    get helpHidden () {
+        return !this.isOpen;
     }
 
     close () {
