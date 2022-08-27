@@ -23,6 +23,7 @@ export interface ViewContext {
     codeEditor?: CodeEditor | null;
     window?: Window;
     helpSheet?: HelpSheet;
+    isInDupMode?: boolean;
 }
 
 export interface InputCapture {

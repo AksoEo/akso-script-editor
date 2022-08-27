@@ -43,7 +43,7 @@ export class DragController implements IExprDragController {
 
         if (!this.defs.useGraphView) {
             this.#removal = removeNode(def);
-            defView.parent.removeSubview(defView);
+            defView.parent?.removeSubview(defView);
             // FIXME: don't do this
             const win = new Window();
             const winRoot = new View();

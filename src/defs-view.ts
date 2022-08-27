@@ -5,7 +5,15 @@ import { Scrollbar } from './scrollbar';
 import config from './config';
 import { ExprSlot, ExprView } from './expr-view';
 import { ValueView } from './value-view';
-import { AscContext, Def, Defs, evalExpr, Expr, remove as removeNode } from './model';
+import {
+    AscContext,
+    cloneWithContext,
+    Def,
+    Defs,
+    evalExpr,
+    Expr,
+    remove as removeNode,
+} from './model';
 import { DragController } from './drag-controller';
 import { HelpTagged } from './help/help-tag';
 
@@ -539,6 +547,7 @@ export class DefView extends View {
 
         this.needsLayout = true;
 
+        Gesture.onTap(this, this.onTap);
         Gesture.onDrag(this, this.onDragMove, this.onDragStart, this.onDragEnd, this.onDragCancel);
     }
 
@@ -584,7 +593,54 @@ export class DefView extends View {
         this.needsLayout = true;
     }
 
+    onTap = () => {
+        if (this.ctx.isInDupMode) {
+            const dupDef = cloneWithContext(this.def, this.def.ctx) as Def;
+            {
+                const trailingNumber = dupDef.name.match(/(\d+)$/);
+                if (trailingNumber) {
+                    dupDef.name = dupDef.name.substr(0, trailingNumber.index) + (+trailingNumber[1] + 1);
+                } else {
+                    dupDef.name += ' 2';
+                }
+            }
+            const defs = (this.def.parent as Defs);
+            dupDef.parent = defs;
+            const defsList = [...defs.defs];
+            defsList.splice(defsList.indexOf(this.def) + 1, 0, dupDef);
+            defs.defs = new Set(defsList);
+            defs.ctx.notifyMutation(defs);
+            new Transaction(1, 0.3).commitAfterLayout(this.ctx);
+        }
+    };
+
     onDragStart = ({ absX, absY }) => {
+        if (this.ctx.isInDupMode) {
+            const dupDef = cloneWithContext(this.def, this.def.ctx) as Def;
+            {
+                const trailingNumber = dupDef.name.match(/(\d+)$/);
+                if (trailingNumber) {
+                    dupDef.name = dupDef.name.substr(0, trailingNumber.index) + (+trailingNumber[1] + 1);
+                } else {
+                    dupDef.name += ' 2';
+                }
+            }
+            const defs = (this.def.parent as Defs);
+            dupDef.parent = defs;
+            const defsList = [...defs.defs];
+            defsList.splice(defsList.indexOf(this.def) + 1, 0, dupDef);
+            defs.defs = new Set(defsList);
+            defs.ctx.notifyMutation(defs);
+            const dupView = getProtoView(dupDef, DefView);
+            dupView.position = this.position;
+            dupView.size = this.size;
+
+            this.parent.layout();
+
+            this.dragController.beginDefDrag(dupDef, absX, absY);
+            return;
+        }
+
         this.dragController.beginDefDrag(this.def, absX, absY);
     };
     onDragMove = ({ absX, absY }) => {

@@ -1,5 +1,5 @@
 /// Pool mapping ASCE model objects to views.
-/// Note that this is a global object, however assuming all objects are unique, no crosstalk should
+/// Note that this is a global object. However, assuming all objects are unique, no crosstalk should
 /// occur.
 import { AnyNode } from './model';
 import { View } from './ui';

@@ -198,6 +198,7 @@ const config = {
             code: 'Kodo',
             graph: 'Grafeo',
             help: 'Helpo',
+            dup: 'Kopii',
 
             save: 'Konservi',
         },

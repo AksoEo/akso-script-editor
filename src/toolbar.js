@@ -11,6 +11,7 @@ export class Toolbar extends View {
             new Button(config.toolbar.buttons.code, this.toggleCodeView),
             new Button(config.toolbar.buttons.graph, this.toggleGraphView),
             new Button(config.toolbar.buttons.help, this.toggleHelp),
+            new Button(config.toolbar.buttons.dup, this.toggleDuplicate),
         ];
 
         this.fileButtons = [
@@ -54,6 +55,11 @@ export class Toolbar extends View {
             this.canvas.isInHelpMode = false;
         };
     }
+
+    toggleDuplicate = (dupButton) => {
+        this.ctx.isInDupMode = !this.ctx.isInDupMode;
+        dupButton.active = this.ctx.isInDupMode;
+    };
 
     save = () => this.editor.onSave();
 

@@ -1,7 +1,15 @@
 import { stdlib } from '@tejo/akso-script';
 import { View, TextLayer, PathLayer, Transaction, Gesture } from './ui';
 import { getProtoView } from './proto-pool';
-import { remove as removeNode, evalExpr, AscContext, Expr, ExprSlotSpec, Def } from './model';
+import {
+    remove as removeNode,
+    evalExpr,
+    AscContext,
+    Expr,
+    ExprSlotSpec,
+    Def,
+    cloneWithContext,
+} from './model';
 import { Dropdown } from './dropdown';
 import { Tooltip } from './tooltip';
 import { editMatrix, MatrixPreview } from './matrix';
@@ -290,9 +298,7 @@ export class ExprView extends View implements HelpTagged {
         this.expr = expr;
         this.updateImpl();
 
-        Gesture.onTap(this, () => {
-            if (this.impl$tapAction) this.impl$tapAction();
-        });
+        Gesture.onTap(this, this.onTap);
         Gesture.onDrag(this, this.onDragMove, this.onDragStart, this.onDragEnd, this.onDragCancel);
     }
 
@@ -328,10 +334,43 @@ export class ExprView extends View implements HelpTagged {
         this.updateImpl();
         this.impl$layout();
     }
+    onTap = () => {
+        if (this.ctx.isInDupMode && this.dragController instanceof DragController) {
+            const defs = (this.dragController as DragController).defs;
+            const dupExpr = cloneWithContext(this.expr, this.expr.ctx);
+            const dupView = getProtoView(dupExpr, ExprView);
+            dupView.position = [
+                this.absolutePosition[0] - defs.absolutePosition[0],
+                this.absolutePosition[1] - defs.absolutePosition[1],
+            ];
+            dupView.dragController = this.dragController;
+            defs.addFloatingExpr(dupExpr);
+            const tx = new Transaction(1, 0.3);
+            dupView.position = [8, 8];
+            tx.commit();
+            return;
+        }
+        if (this.impl$tapAction) this.impl$tapAction();
+    };
 
     #dragging = false;
     onDragStart = ({ absX, absY }) => {
         if (this.noInteraction || !this.dragController) return;
+
+        if (this.ctx.isInDupMode && this.dragController instanceof DragController) {
+            const defs = (this.dragController as DragController).defs;
+            const dupExpr = cloneWithContext(this.expr, this.expr.ctx) as Expr.Any;
+            const dupView = getProtoView(dupExpr, ExprView);
+            dupView.position = [
+                this.absolutePosition[0] - defs.absolutePosition[0],
+                this.absolutePosition[1] - defs.absolutePosition[1],
+            ];
+            dupView.dragController = this.dragController;
+            defs.addFloatingExpr(dupExpr);
+            this.dragController.beginExprDrag(dupExpr, absX, absY);
+            return;
+        }
+
         this.decorationOnly = true;
         this.dragController.beginExprDrag(this.expr, absX, absY);
         if (this.impl$onDragStart) this.impl$onDragStart();
