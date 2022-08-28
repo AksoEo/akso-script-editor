@@ -890,6 +890,7 @@ export function evalExpr (expr: Expr.Any) {
 }
 
 export function cloneWithContext (node: AnyNode, ctx: AscContext, clearParents?: boolean): AnyNode {
+    if (!node || !('type' in node)) return null as any;
     if (node.type === NODE_NULL) {
         return {
             type: node.type,
@@ -926,7 +927,7 @@ export function cloneWithContext (node: AnyNode, ctx: AscContext, clearParents?:
             args: node.args.map(item => cloneWithContext(item, ctx, clearParents) as Expr.Any),
         };
         if (!clearParents) {
-            expr.func.parent = expr;
+            if (expr.func) expr.func.parent = expr;
             for (const arg of expr.args) arg.parent = expr;
         }
         return expr;
@@ -964,7 +965,7 @@ export function cloneWithContext (node: AnyNode, ctx: AscContext, clearParents?:
             params: node.params,
             body: cloneWithContext(node.body, ctx, clearParents) as Defs,
         };
-        if (!clearParents) expr.body.parent = expr;
+        if (!clearParents && expr.body) expr.body.parent = expr;
         return expr;
     } else if (node.type === NODE_DEF) {
         const def: Def = {
@@ -974,7 +975,7 @@ export function cloneWithContext (node: AnyNode, ctx: AscContext, clearParents?:
             name: node.name,
             expr: cloneWithContext(node.expr, ctx, clearParents) as Expr.Any,
         };
-        if (!clearParents) def.expr.parent = def;
+        if (!clearParents && def.expr) def.expr.parent = def;
         return def;
     } else if (node.type === NODE_DEFS) {
         const defs: Defs = {
