@@ -33,11 +33,7 @@ const inputOptions = {
             },
         }),
         resolve(),
-        commonjs({
-            namedExports: {
-                'google-libphonenumber': ['PhoneNumberUtil', 'PhoneNumberFormat'],
-            }
-        }),
+        commonjs(),
         typescript2(),
         babel({
             plugins: ['@babel/plugin-proposal-class-properties'],

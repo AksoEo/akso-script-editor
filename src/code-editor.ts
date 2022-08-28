@@ -47,7 +47,7 @@ export class CodeEditor {
             this.#worker = new CodeEditorWorker();
         }
         const id = Math.random().toString(36);
-        const { result, error } = await new Promise((resolve) => {
+        const { result, error } = await new Promise<any>((resolve) => {
             const msgHandler = (e: MessageEvent) => {
                 const message = e.data;
                 if (message.id !== id) return;
