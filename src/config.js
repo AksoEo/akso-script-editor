@@ -569,7 +569,7 @@ const hNodes = {
     },
     list(...items) {
         return { type: 'l', items };
-    }
+    },
 };
 
 const stdlibDocs = {
