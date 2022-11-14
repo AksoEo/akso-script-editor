@@ -1,16 +1,66 @@
-import CodeMirror from 'codemirror';
-import 'codemirror/lib/codemirror.css';
+import { EditorView, minimalSetup } from 'codemirror';
+import { Decoration, lineNumbers, ViewPlugin, WidgetType } from '@codemirror/view';
+import { EditorState, StateEffect, StateField, Range } from '@codemirror/state';
 import './asct/cm-theme.css';
-import './asct/cm-mode';
+import { asct, asctStyle } from './asct/cm-mode';
 import { Defs } from './model';
 // @ts-ignore
-import CodeEditorWorker from 'web-worker:./code-editor-worker';
 import { ViewContext } from './ui/context';
+
+const setInlineErrors = StateEffect.define<Range<Decoration>[]>();
+const inlineErrors = StateField.define({
+    create() {
+        return Decoration.none;
+    },
+    update(value, tr) {
+        value = value.map(tr.changes);
+        for (const effect of tr.effects) {
+            if (effect.is(setInlineErrors)) {
+                value = Decoration.set(effect.value);
+            }
+        }
+        return value;
+    },
+    provide: f => EditorView.decorations.from(f),
+});
+class LineErrorWidget extends WidgetType {
+    error: Error;
+    constructor(error: Error) {
+        super();
+        this.error = error;
+    }
+    eq(other) {
+        return this.error === other.error;
+    }
+    toDOM() {
+        const node = document.createElement('div');
+        node.className = 'asct-error-message';
+        node.textContent = this.error.message;
+        return node;
+    }
+}
+
+function initExtensions(self: CodeEditor) {
+    return [
+        ViewPlugin.fromClass(class {
+            update(update) {
+                if (update.docChanged) {
+                    self.scheduleValidate();
+                }
+            }
+        }),
+        minimalSetup,
+        lineNumbers(),
+        inlineErrors,
+        asct,
+        asctStyle,
+    ];
+}
 
 /// The codemirror code editor overlay.
 export class CodeEditor {
     node: HTMLDivElement;
-    codeMirror: CodeMirror | null = null;
+    editorView: EditorView | null = null;
     onAsctChange: (data: Defs) => void | null = null;
 
     constructor () {
@@ -33,7 +83,7 @@ export class CodeEditor {
         }, 500) as unknown as number;
     };
 
-    #worker: CodeEditorWorker | null = null;
+    #worker: Worker | null = null;
 
     #lastErrorLines = [];
     #lastWidget = null;
@@ -41,10 +91,10 @@ export class CodeEditor {
     validate = async () => {
         const validateId = ++this.#validateId;
         const editor = this.get();
-        const value = editor.getValue();
+        const value = editor.state.doc.toString();
 
         if (!this.#worker) {
-            this.#worker = new CodeEditorWorker();
+            this.#worker = new Worker(new URL('./code-editor-worker.ts', import.meta.url), { type: 'module' });
         }
         const id = Math.random().toString(36);
         const { result, error } = await new Promise<any>((resolve) => {
@@ -72,44 +122,66 @@ export class CodeEditor {
 
         if (this.#validateId !== validateId) return;
 
-        for (const ln of this.#lastErrorLines) {
-            editor.doc.removeLineClass(ln, 'background', 'asct-error-line');
-        }
-        if (this.#lastWidget) {
-            this.#lastWidget.clear();
-            this.#lastWidget = null;
-        }
-
         if (error) {
-            this.#lastErrorLines = [];
+            const endLine = this.editorView.state.doc.line(error.end.line + 1);
+
+            const lineDec = Decoration.line({
+                class: 'asct-error-line',
+            });
+            const errorDec = Decoration.widget({
+                block: true,
+                side: 1,
+                widget: new LineErrorWidget(error),
+            });
+
+            const errorDecorations = [];
             for (let ln = error.start.line; ln <= error.end.line; ln++) {
-                this.#lastErrorLines.push(ln);
-                editor.doc.addLineClass(ln, 'background', 'asct-error-line');
+                const line = this.editorView.state.doc.line(ln + 1);
+                errorDecorations.push(lineDec.range(line.from, line.from));
             }
+            errorDecorations.push(errorDec.range(endLine.to, endLine.to));
 
-            const node = document.createElement('div');
-            node.className = 'asct-error-message';
-            node.textContent = error.message;
-
-            this.#lastWidget = editor.doc.addLineWidget(error.end.line, node);
+            this.editorView.dispatch({
+                effects: setInlineErrors.of(errorDecorations),
+            });
         } else if (this.onAsctChange) {
+            this.editorView.dispatch({
+                effects: setInlineErrors.of([]),
+            });
             this.onAsctChange(result);
         }
     };
 
-    get = () => {
-        if (!this.codeMirror) {
-            // we need to init this lazily because it breaks if we initialize it during creation
-            this.codeMirror = CodeMirror(this.node, {
-                lineSeparator: '\n',
-                indentUnit: 4,
-                lineNumbers: true,
-                value: '',
-                mode: 'asct',
+    getValue() {
+        return this.get().state.doc.toString();
+    }
+
+    setValue(value: string) {
+        if (this.getValue()) {
+            this.editorView.dispatch({
+                changes: {
+                    from: 0,
+                    to: this.editorView.state.doc.length,
+                    insert: value,
+                },
             });
-            this.codeMirror.on('changes', this.scheduleValidate);
-            this.codeMirror.getWrapperElement().style.height = '100%';
+        } else {
+            this.editorView.setState(EditorState.create({
+                doc: value,
+                extensions: initExtensions(this),
+            }));
         }
-        return this.codeMirror;
+    }
+
+    get = () => {
+        if (!this.editorView) {
+            const self = this;
+            // we need to init this lazily because it breaks if we initialize it during creation
+            this.editorView = new EditorView({
+                parent: this.node,
+                extensions: initExtensions(this),
+            });
+        }
+        return this.editorView;
     };
 }

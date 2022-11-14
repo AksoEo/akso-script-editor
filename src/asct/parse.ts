@@ -44,6 +44,10 @@ class TokenCursor {
         this.prevTok = null;
     }
 
+    getPos(): string {
+        return this.pos.join(',');
+    }
+
     peek (): Token {
         if (this.eof()) throw new EOFError(`unexpected stream end`);
         let t: Token | { contents: Token[] } = { contents: this.tokens };

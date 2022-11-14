@@ -1,18 +1,23 @@
-import typescript2 from 'rollup-plugin-typescript2';
+import typescript from '@rollup/plugin-typescript';
 import babel from '@rollup/plugin-babel';
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import postcss from 'rollup-plugin-postcss';
-import workerLoader from 'rollup-plugin-web-worker-loader';
+import offMainThread from '@surma/rollup-plugin-off-main-thread';
 import { eslint } from 'rollup-plugin-eslint';
+import path from 'node:path';
 
 const isTestEnv = process.env.NODE_ENV === 'test';
 
 const inputOptions = {
     input: 'src/index.ts',
     plugins: [
-        postcss(),
-        workerLoader({ targetPlatform: 'browser', extensions: ['.js', '.ts'] }),
+        postcss({
+            extract: path.resolve('dist/asce.css'),
+        }),
+        offMainThread({
+            silenceESMWorkerWarning: true,
+        }),
         eslint({
             throwOnError: true,
             include: ['src/**'],
@@ -34,8 +39,9 @@ const inputOptions = {
         }),
         resolve(),
         commonjs(),
-        typescript2(),
+        typescript(),
         babel({
+            babelHelpers: 'bundled',
             plugins: ['@babel/plugin-proposal-class-properties'],
             exclude: ['node_modules/**'],
         }),
@@ -48,7 +54,7 @@ const inputOptions = {
     ],
 };
 const outputOptions = {
-    file: 'dist/asce.esm.js',
+    dir: 'dist',
     format: 'esm',
 };
 

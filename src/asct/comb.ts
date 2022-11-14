@@ -3,6 +3,7 @@
 export class EOFError extends Error {}
 
 export interface Cursor {
+    getPos(): string;
     peek();
     next();
     clone(): Cursor;
@@ -47,6 +48,14 @@ export const oneOf = <T>(...parsers: Parser<T>[]) => (str: Cursor) => {
         }
     }
     str.throw(str.getCurrentError('empty oneOf'));
+};
+export const prefixMatch = <T>(...prefixes: ([T, Parser<T>])[]) => (str: Cursor) => {
+    for (const [prefix, parser] of prefixes) {
+        if (!prefix || str.peek() === prefix) {
+            return parser(str);
+        }
+    }
+    str.throw(str.getCurrentError('no prefix matched'));
 };
 export const takeUntil = <T>(parser: Parser<T>) => (str: Cursor) => {
     let contents = '';

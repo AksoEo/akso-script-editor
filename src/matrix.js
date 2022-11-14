@@ -987,7 +987,7 @@ class MatrixCell extends View {
                 this.value,
                 { font: config.identFont },
             ).then(value => {
-                this.value = value;
+                this.value = value.normalize();
                 this.onMutation();
                 new Transaction(1, 0.3).commitAfterLayout(this.ctx);
             });

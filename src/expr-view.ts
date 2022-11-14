@@ -454,10 +454,10 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
                 { font: config.identFont },
             ).then(name => {
                 if (this.isDef) {
-                    this.onDefRename(name);
+                    this.onDefRename(name.normalize());
                     this.needsLayout = true;
                 } else {
-                    this.expr.name = name;
+                    this.expr.name = name.normalize();
                     this.expr.ctx.notifyMutation(this.expr);
                     new Transaction(1, 0.3).commitAfterLayout(this.ctx);
                 }
@@ -679,7 +679,7 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
                 this.expr.value,
                 { font: config.identFont },
             ).then(value => {
-                this.expr.value = value;
+                this.expr.value = value.normalize();
                 this.expr.ctx.notifyMutation(this.expr);
                 new Transaction(1, 0.3).commitAfterLayout(this.ctx);
             });

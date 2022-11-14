@@ -1,5 +1,4 @@
-import Editor from '../dist/asce.esm.js';
-import { lex, parse, write } from '../dist/asce.esm.js';
+import Editor, { lex, parse, write } from '../dist/index.js';
 
 window.lex = lex;
 window.parse = parse;

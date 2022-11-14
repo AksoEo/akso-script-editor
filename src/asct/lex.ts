@@ -3,6 +3,7 @@ import {
     tag,
     wrap,
     oneOf,
+    prefixMatch,
     takeUntil,
     map,
     regex,
@@ -22,6 +23,10 @@ class StrCursor {
         this.str = str;
         this.pos = 0;
         this.errors = [];
+    }
+
+    getPos(): string {
+        return this.pos.toString();
     }
 
     peek () {
@@ -275,7 +280,13 @@ const treeParens = spanned(map(wrap('(', ')', tokenStream, '(...)'), inner => ne
 
 const delim = spanned(map(tag(','), () => new DelimToken()));
 
-const oneValueToken = oneOf(nul, bool, delim, number, string, ident, infixIdent, treeBracket, treeBrace, treeParens);
+const oneUnprefixedValueToken = oneOf(nul, bool, delim, number, string, ident, infixIdent);
+const oneValueToken = prefixMatch(
+    ['[', treeBracket],
+    ['{', treeBrace],
+    ['(', treeParens],
+    [null, oneUnprefixedValueToken],
+);
 const nbws = spanned(map(regex(/^[ \t]+/, 'non-breaking whitespace'), () => new SpaceToken()));
 const nbToken = oneOf(nbws, oneValueToken);
 
@@ -372,7 +383,7 @@ function tokenStream (str) { // for hoisting
 }
 
 export function lex (src): Token[] {
-    const cursor = new StrCursor(src);
+    const cursor = new StrCursor(src.normalize());
     const tokens = tokenStream(cursor);
     if (!cursor.eof()) {
         throw cursor.getCurrentError();

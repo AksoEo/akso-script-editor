@@ -125,7 +125,7 @@ export class CanvasView extends View {
         const code = write(this.defsView.defs);
         this.ctx.codeMirrorNode.style.display = '';
         this.isInCodeMode = true;
-        this.ctx.codeEditor.get().setValue(code);
+        this.ctx.codeEditor.setValue(code);
         this.ctx.codeEditor.onAsctChange = this.onCodeMirrorAsctChange;
     }
     onCodeMirrorAsctChange = (data) => {
@@ -141,7 +141,7 @@ export class CanvasView extends View {
         }, 10);
     };
     exitCodeMode () {
-        const code = this.ctx.codeEditor.get().getValue();
+        const code = this.ctx.codeEditor.getValue();
         try {
             const data = parse(lex(code), this.modelCtx);
             this.onCodeMirrorAsctChange(data);
