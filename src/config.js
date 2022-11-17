@@ -199,6 +199,8 @@ const config = {
             graph: 'Grafeo',
             help: 'Helpo',
             dup: 'Kopii',
+            undo: '[[Undo]]',
+            redo: '[[Redo]]',
 
             save: 'Konservi',
         },

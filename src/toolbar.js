@@ -12,6 +12,8 @@ export class Toolbar extends View {
             new Button(config.toolbar.buttons.graph, this.toggleGraphView),
             new Button(config.toolbar.buttons.help, this.toggleHelp),
             new Button(config.toolbar.buttons.dup, this.toggleDuplicate),
+            new Button(config.toolbar.buttons.undo, this.undo),
+            new Button(config.toolbar.buttons.redo, this.redo),
         ];
 
         this.fileButtons = [
@@ -59,6 +61,14 @@ export class Toolbar extends View {
     toggleDuplicate = (dupButton) => {
         this.ctx.isInDupMode = !this.ctx.isInDupMode;
         dupButton.active = this.ctx.isInDupMode;
+    };
+
+    undo = () => {
+        this.ctx.history.undo();
+    };
+
+    redo = () => {
+        this.ctx.history.redo();
     };
 
     save = () => this.editor.onSave();

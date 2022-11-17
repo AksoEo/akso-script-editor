@@ -462,10 +462,22 @@ class StandaloneExprView extends View {
 
         this.dragController = dragController;
         this.exprSlot = new ExprSlot(expr => {
-            this.def.expr = expr;
-            expr.parent = this.def;
-            this.def.ctx.notifyMutation(expr);
-            this.def.ctx.notifyMutation(this.def);
+            const prevExpr = this.def.expr;
+            const prevParent = expr.parent;
+
+            this.ctx.history.commitChange('slot-insert-expr', () => {
+                this.def.expr = expr;
+                expr.parent = this.def;
+                this.def.ctx.notifyMutation(expr);
+                this.def.ctx.notifyMutation(this.def);
+
+                return () => {
+                    this.def.expr = prevExpr;
+                    expr.parent = prevParent;
+                    this.def.ctx.notifyMutation(expr);
+                    this.def.ctx.notifyMutation(this.def);
+                };
+            }, expr);
         }, this.def.ctx);
         this.addSubview(this.exprSlot);
         this.needsLayout = true;
@@ -532,10 +544,22 @@ export class DefView extends View {
         this.layer.background = config.def.background;
 
         this.exprSlot = new ExprSlot(expr => {
-            this.def.expr = expr;
-            expr.parent = this.def;
-            this.def.ctx.notifyMutation(expr);
-            this.def.ctx.notifyMutation(this.def);
+            const prevExpr = this.def.expr;
+            const prevParent = expr.parent;
+
+            this.ctx.history.commitChange('slot-insert-expr', () => {
+                this.def.expr = expr;
+                expr.parent = this.def;
+                this.def.ctx.notifyMutation(expr);
+                this.def.ctx.notifyMutation(this.def);
+
+                return () => {
+                    this.def.expr = prevExpr;
+                    expr.parent = prevParent;
+                    this.def.ctx.notifyMutation(expr);
+                    this.def.ctx.notifyMutation(this.def);
+                };
+            }, expr);
         }, this.def.ctx);
 
         this.valueView = new DefValueView();

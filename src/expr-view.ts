@@ -453,12 +453,21 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
                 this.expr.name,
                 { font: config.identFont },
             ).then(name => {
+                name = name.normalize();
                 if (this.isDef) {
-                    this.onDefRename(name.normalize());
+                    this.onDefRename(name);
                     this.needsLayout = true;
                 } else {
-                    this.expr.name = name.normalize();
-                    this.expr.ctx.notifyMutation(this.expr);
+                    this.ctx.history.commitChange('change-ref', () => {
+                        const prevName = this.expr.name;
+                        this.expr.name = name;
+                        this.expr.ctx.notifyMutation(this.expr);
+
+                        return () => {
+                            this.expr.name = prevName;
+                            this.expr.ctx.notifyMutation(this.expr);
+                        };
+                    });
                     new Transaction(1, 0.3).commitAfterLayout(this.ctx);
                 }
             });
@@ -587,8 +596,16 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
         },
         tapAction () {
             const transaction = new Transaction(1, 0.3);
-            this.expr.value = !this.expr.value;
-            this.expr.ctx.notifyMutation(this.expr);
+
+            this.ctx.history.commitChange('toggle-bool', () => {
+                this.expr.value = !this.expr.value;
+                this.expr.ctx.notifyMutation(this.expr);
+
+                return () => {
+                    this.expr.value = !this.expr.value;
+                    this.expr.ctx.notifyMutation(this.expr);
+                };
+            });
             transaction.commitAfterLayout(this.ctx);
         },
         layout () {
@@ -631,11 +648,20 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
                 (this.expr.value || 0).toString(),
                 { font: config.identFont },
             ).then(value => {
-                this.expr.value = Number.parseFloat(value);
-                if (!Number.isFinite(this.expr.value)) {
-                    this.expr.value = 0;
-                }
-                this.expr.ctx.notifyMutation(this.expr);
+                value = Number.parseFloat(value);
+                if (!Number.isFinite(value)) value = 0;
+
+                const prevValue = this.expr.value;
+
+                this.ctx.history.commitChange('change-number', () => {
+                    this.expr.value = value;
+                    this.expr.ctx.notifyMutation(this.expr);
+
+                    return () => {
+                        this.expr.value = prevValue;
+                        this.expr.ctx.notifyMutation(this.expr);
+                    };
+                });
                 new Transaction(1, 0.3).commitAfterLayout(this.ctx);
             });
         },
@@ -679,8 +705,17 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
                 this.expr.value,
                 { font: config.identFont },
             ).then(value => {
-                this.expr.value = value.normalize();
-                this.expr.ctx.notifyMutation(this.expr);
+                value = value.normalize();
+                const prevValue = this.expr.value;
+                this.ctx.history.commitChange('change-string', () => {
+                    this.expr.value = value;
+                    this.expr.ctx.notifyMutation(this.expr);
+
+                    return () => {
+                        this.expr.value = prevValue;
+                        this.expr.ctx.notifyMutation(this.expr);
+                    };
+                });
                 new Transaction(1, 0.3).commitAfterLayout(this.ctx);
             });
         },
@@ -717,8 +752,24 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
             delete this.iconLayer;
         },
         tapAction () {
+            const cloneMatrix = o => {
+                if (Array.isArray(o)) return o.map(cloneMatrix);
+                else return o;
+            };
+            const prevValue = cloneMatrix(this.expr.value);
+
             editMatrix(this.ctx, this.expr.value, () => {
-                this.expr.ctx.notifyMutation(this.expr);
+                const newValue = this.expr.value;
+                this.ctx.history.commitChange('change-matrix', () => {
+                    this.expr.value = newValue;
+                    this.expr.ctx.notifyMutation(this.expr);
+
+                    return () => {
+                        this.expr.value = prevValue;
+                        this.expr.ctx.notifyMutation(this.expr);
+                    };
+                });
+
                 this.needsLayout = true;
                 this.preview.needsLayout = true;
             });
@@ -766,12 +817,30 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
             for (let i = this.slots.length; i < itemCount + 1; i++) {
                 const index = i;
                 this.slots.push(new ExprSlot(expr => {
-                    this.expr.items[index] = expr;
-                    expr.parent = this.expr;
-                    this.ctx.modelCtx.startMutation();
-                    this.ctx.modelCtx.notifyMutation(this);
-                    this.ctx.modelCtx.notifyMutation(this.expr);
-                    this.ctx.modelCtx.flushMutation();
+                    const prevItem = i === this.expr.items.length ? null : this.expr.items[i];
+                    const prevParent = expr.parent;
+
+                    this.ctx.history.commitChange('slot-insert-expr', () => {
+                        this.expr.items[index] = expr;
+                        expr.parent = this.expr;
+                        this.ctx.modelCtx.startMutation();
+                        this.ctx.modelCtx.notifyMutation(this);
+                        this.ctx.modelCtx.notifyMutation(this.expr);
+                        this.ctx.modelCtx.flushMutation();
+
+                        return () => {
+                            if (prevItem) {
+                                this.expr.items[index] = prevItem;
+                            } else {
+                                this.expr.items.pop();
+                            }
+                            expr.parent = prevParent;
+                            this.ctx.modelCtx.startMutation();
+                            this.ctx.modelCtx.notifyMutation(this);
+                            this.ctx.modelCtx.notifyMutation(this.expr);
+                            this.ctx.modelCtx.flushMutation();
+                        };
+                    }, expr);
                 }, this.expr.ctx));
             }
 
@@ -886,9 +955,20 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
             for (let i = this.argSlots.length; i < params.length; i++) {
                 const index = i;
                 const slot = new ExprSlot(expr => {
-                    this.expr.args[index] = expr;
-                    expr.parent = this.expr;
-                    expr.ctx.notifyMutation(this.expr);
+                    const prevArg = this.expr.args[index];
+                    const prevParent = expr.parent;
+
+                    this.ctx.history.commitChange('slot-insert-expr', () => {
+                        this.expr.args[index] = expr;
+                        expr.parent = this.expr;
+                        expr.ctx.notifyMutation(this.expr);
+
+                        return () => {
+                            this.expr.args[index] = prevArg;
+                            expr.parent = prevParent;
+                            expr.ctx.notifyMutation(this.expr);
+                        };
+                    }, expr);
                 }, this.expr.ctx);
                 const label = new TextLayer();
                 label.font = config.callArgFont;
@@ -1192,17 +1272,41 @@ class SwitchMatch extends View {
         this.thenLabel.text = config.primitives.switchThen;
 
         this.cond = new ExprSlot(cond => {
-            this.match.cond = cond;
-            cond.parent = this.expr;
-            this.expr.ctx.notifyMutation(this.expr);
-            this.expr.ctx.notifyMutation(cond);
+            const prevCond = this.match.cond;
+            const prevParent = cond.parent;
+
+            this.ctx.history.commitChange('slot-insert-expr', () => {
+                this.match.cond = cond;
+                cond.parent = this.expr;
+                this.expr.ctx.notifyMutation(this.expr);
+                this.expr.ctx.notifyMutation(cond);
+
+                return () => {
+                    this.match.cond = prevCond;
+                    cond.parent = prevParent;
+                    this.expr.ctx.notifyMutation(this.expr);
+                    this.expr.ctx.notifyMutation(cond);
+                };
+            }, cond);
         }, this.expr.ctx);
         this.cond.spec = { type: 'switchcond' };
         this.value = new ExprSlot(value => {
-            this.match.value = value;
-            value.parent = this.expr;
-            this.expr.ctx.notifyMutation(this.expr);
-            this.expr.ctx.notifyMutation(value);
+            const prevValue = this.match.value;
+            const prevParent = value.parent;
+
+            this.ctx.history.commitChange('slot-insert-expr', () => {
+                this.match.value = value;
+                value.parent = this.expr;
+                this.expr.ctx.notifyMutation(this.expr);
+                this.expr.ctx.notifyMutation(value);
+
+                return () => {
+                    this.match.value = prevValue;
+                    value.parent = prevParent;
+                    this.expr.ctx.notifyMutation(this.expr);
+                    this.expr.ctx.notifyMutation(value);
+                };
+            }, value);
         }, this.expr.ctx);
     }
     layout () {

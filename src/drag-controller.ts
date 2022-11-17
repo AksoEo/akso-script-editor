@@ -120,16 +120,24 @@ export class DragController implements IExprDragController {
             const transaction = new Transaction(1, 0.3);
             {
                 // remove from parent
-                const transaction = new Transaction(1, 0);
-                const pos = exprView.absolutePosition;
-                const defsPos = this.defs.absolutePosition;
-                exprView.position = [
-                    pos[0] - defsPos[0],
-                    pos[1] - defsPos[1],
-                ];
-                transaction.commit();
-                this.#removal = removeNode(expr);
-                this.defs.addFloatingExpr(expr);
+                exprView.ctx.history.commitChange('remove-node', () => {
+                    const transaction = new Transaction(1, 0);
+                    const pos = exprView.absolutePosition;
+                    const defsPos = this.defs.absolutePosition;
+                    exprView.position = [
+                        pos[0] - defsPos[0],
+                        pos[1] - defsPos[1],
+                    ];
+                    transaction.commit();
+
+                    const removal = this.#removal = removeNode(expr);
+                    this.defs.addFloatingExpr(expr);
+
+                    return () => {
+                        this.defs.removeFloatingExpr(expr);
+                        removal.undo();
+                    };
+                }, expr);
             }
 
             // set parent in hovering-over state
@@ -153,8 +161,19 @@ export class DragController implements IExprDragController {
         this.endDrag(ExprView, () => {
             if (this.#currentSlot) {
                 const t = new Transaction(0, 0);
-                this.defs.removeFloatingExpr(this.#draggingNode);
-                this.#currentSlot.insertExpr(this.#draggingNode);
+                const node = this.#draggingNode;
+                const exprView = getProtoView(node, ExprView);
+
+                this.#currentSlot.ctx.history.commitChange('slot-before-insert', () => {
+                    this.defs.removeFloatingExpr(node);
+
+                    return () => {
+                        exprView.layer.scale = 1; // reset scaling from trash
+                        this.defs.addFloatingExpr(node);
+                    };
+                }, node);
+
+                this.#currentSlot.insertExpr(node);
                 t.commit();
             }
         });
@@ -162,6 +181,8 @@ export class DragController implements IExprDragController {
     cancelExprDrag () {
         this.defs.showTrash = false;
         if (this.#removal) {
+            const exprView = getProtoView(this.#draggingNode, ExprView);
+            exprView.ctx.history.undos.pop();
             this.defs.removeFloatingExpr(this.#draggingNode);
             this.#removal.undo();
             this.#removal = null;

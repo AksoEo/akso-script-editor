@@ -1,6 +1,7 @@
 import { BaseLayer, svgNS, Transaction } from './layer/base';
 import { ViewContext } from './context';
 import { View } from './view';
+import { History } from '../history';
 
 /// Like a ViewRoot, but render-only, and sizes itself to fit content.
 export class RenderViewRoot {
@@ -39,6 +40,7 @@ export class RenderViewRoot {
             },
             beginInput: null,
             codeMirrorNode: null,
+            history: new History(),
         };
     }
 

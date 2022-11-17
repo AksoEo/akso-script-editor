@@ -3,6 +3,7 @@ import { BaseLayer, Transaction } from './layer/base';
 import { Window } from './window';
 import { CodeEditor } from '../code-editor';
 import { HelpSheet } from '../help/help-sheet';
+import { History } from '../history';
 
 export interface ViewContext {
     render: {
@@ -24,6 +25,7 @@ export interface ViewContext {
     window?: Window;
     helpSheet?: HelpSheet;
     isInDupMode?: boolean;
+    history: History;
 }
 
 export interface InputCapture {

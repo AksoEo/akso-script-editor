@@ -39,7 +39,7 @@ export class HelpSheet {
             top: '0',
             right: '0',
             margin: '16px',
-            maxWidth: '300px',
+            maxWidth: '400px',
             width: '100%',
             maxHeight: '50%',
             overflow: 'hidden auto',
