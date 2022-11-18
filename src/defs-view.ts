@@ -694,7 +694,13 @@ export class DefView extends View {
         const refPos = this.refView.absolutePosition;
         const defsPos = this.dragController.defs.absolutePosition;
         refView.position = [refPos[0] - defsPos[0], refPos[1] - defsPos[1]];
-        this.dragController.defs.addFloatingExpr(ref);
+
+        this.ctx.history.commitChange('create-def-ref', () => {
+            this.dragController.defs.addFloatingExpr(ref);
+            return () => {
+                this.dragController.defs.removeFloatingExpr(ref);
+            };
+        }, ref);
         this.dragController.beginExprDrag(ref, x, y);
         transaction.commit();
     }

@@ -7,6 +7,7 @@ export type HistoryLabel =
     | 'change-string'
     | 'change-matrix'
     | 'change-ref'
+    | 'create-def-ref'
     | 'remove-node'
     | 'slot-before-insert'
     | 'slot-insert-expr'
@@ -20,6 +21,9 @@ export interface HistoryEntry {
 }
 
 function canCoalesce(a: HistoryEntry, b: HistoryEntry) {
+    if (a.label === 'create-def-ref' && b.label === 'remove-node') {
+        if (a.data === b.data) return true;
+    }
     if (a.label === 'remove-node' && b.label === 'slot-before-insert') {
         if (a.data === b.data) return true;
     }
