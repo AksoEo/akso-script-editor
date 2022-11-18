@@ -192,11 +192,10 @@ class FormVarItem extends View {
     }
     onRemove = () => {
         const t = new Transaction(1, 0.3);
-        const parent = this.parent;
-        // so far, parent is guaranteed to be an ItemList
-        parent.items.splice(parent.items.indexOf(this), 1);
-        parent.needsLayout = true;
-        t.commitAfterLayout(parent.ctx);
+        const idx = this.ctx.modelCtx.formVars.indexOf(this.var);
+        this.ctx.modelCtx.formVars.splice(idx, 1);
+        this.ctx.modelCtx.notifyFormVarsMutation();
+        t.commitAfterLayout(this.ctx);
     };
 
     onTypeChange (type) {

@@ -958,15 +958,22 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
                     const prevArg = this.expr.args[index];
                     const prevParent = expr.parent;
 
+                    if (!this.ctx) return;
                     this.ctx.history.commitChange('slot-insert-expr', () => {
                         this.expr.args[index] = expr;
                         expr.parent = this.expr;
+                        expr.ctx.startMutation();
+                        expr.ctx.notifyMutation(this);
                         expr.ctx.notifyMutation(this.expr);
+                        expr.ctx.flushMutation();
 
                         return () => {
                             this.expr.args[index] = prevArg;
                             expr.parent = prevParent;
+                            expr.ctx.startMutation();
+                            expr.ctx.notifyMutation(this);
                             expr.ctx.notifyMutation(this.expr);
+                            expr.ctx.flushMutation();
                         };
                     }, expr);
                 }, this.expr.ctx);
@@ -1278,14 +1285,18 @@ class SwitchMatch extends View {
             this.ctx.history.commitChange('slot-insert-expr', () => {
                 this.match.cond = cond;
                 cond.parent = this.expr;
-                this.expr.ctx.notifyMutation(this.expr);
+                this.expr.ctx.startMutation();
                 this.expr.ctx.notifyMutation(cond);
+                this.expr.ctx.notifyMutation(this.expr);
+                this.expr.ctx.flushMutation();
 
                 return () => {
                     this.match.cond = prevCond;
                     cond.parent = prevParent;
+                    this.expr.ctx.startMutation();
                     this.expr.ctx.notifyMutation(this.expr);
                     this.expr.ctx.notifyMutation(cond);
+                    this.expr.ctx.flushMutation();
                 };
             }, cond);
         }, this.expr.ctx);
@@ -1297,14 +1308,18 @@ class SwitchMatch extends View {
             this.ctx.history.commitChange('slot-insert-expr', () => {
                 this.match.value = value;
                 value.parent = this.expr;
-                this.expr.ctx.notifyMutation(this.expr);
+                this.expr.ctx.startMutation();
                 this.expr.ctx.notifyMutation(value);
+                this.expr.ctx.notifyMutation(this.expr);
+                this.expr.ctx.flushMutation();
 
                 return () => {
                     this.match.value = prevValue;
                     value.parent = prevParent;
+                    this.expr.ctx.startMutation();
                     this.expr.ctx.notifyMutation(this.expr);
                     this.expr.ctx.notifyMutation(value);
+                    this.expr.ctx.flushMutation();
                 };
             }, value);
         }, this.expr.ctx);

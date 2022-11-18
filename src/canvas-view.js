@@ -132,13 +132,25 @@ export class CanvasView extends View {
         if (!this.isInCodeMode) return;
         const parsed = cloneWithContext(data, this.modelCtx);
 
-        this.root = parsed;
-        this.resolveRefs();
-        this.needsLayout = true;
-        setTimeout(() => {
-            // hack to fix arrows in graph view
-            this.defsView.needsLayout = true;
-        }, 10);
+        const prevRoot = this.root;
+        this.ctx.history.commitChange('commit-code', () => {
+            this.root = parsed;
+            this.resolveRefs();
+            this.needsLayout = true;
+            setTimeout(() => {
+                // hack to fix arrows in graph view
+                this.defsView.needsLayout = true;
+            }, 10);
+
+            return () => {
+                this.root = prevRoot;
+                this.resolveRefs();
+                this.needsLayout = true;
+                setTimeout(() => {
+                    this.defsView.needsLayout = true;
+                }, 10);
+            };
+        });
     };
     exitCodeMode () {
         const code = this.ctx.codeEditor.getValue();
