@@ -1,5 +1,5 @@
 import dagre from 'dagre';
-import { View, TextLayer, ArrowLayer, Transaction, Gesture } from './ui';
+import { View, Layer, TextLayer, PathLayer, ArrowLayer, Transaction, Gesture } from './ui';
 import { viewPool, getProtoView } from './proto-pool';
 import { Scrollbar } from './scrollbar';
 import config from './config';
@@ -935,8 +935,35 @@ export class Trash extends View {
     shouldShow = false;
     decorationOnly = false;
 
+    iconLayer: Layer;
+    canLayer: Layer;
+    canRectLayer: PathLayer;
+    canLinesLayer: PathLayer;
+    lidLayer: Layer;
+    lidRectLayer: PathLayer;
+    lidHandleLayer: PathLayer;
+
     constructor () {
         super();
+
+        this.iconLayer = new Layer();
+        this.canLayer = new Layer();
+        this.lidLayer = new Layer();
+        this.canRectLayer = new PathLayer();
+        this.canRectLayer.path = config.trash.can.rect;
+        this.canLinesLayer = new PathLayer();
+        this.canLinesLayer.path = config.trash.can.lines;
+        this.lidRectLayer = new PathLayer();
+        this.lidRectLayer.path = config.trash.lid.rect;
+        this.lidHandleLayer = new PathLayer();
+        this.lidHandleLayer.path = config.trash.lid.handle;
+
+        this.iconLayer.addSublayer(this.canLayer);
+        this.iconLayer.addSublayer(this.lidLayer);
+        this.canLayer.addSublayer(this.canRectLayer);
+        this.canLayer.addSublayer(this.canLinesLayer);
+        this.lidLayer.addSublayer(this.lidRectLayer);
+        this.lidLayer.addSublayer(this.lidHandleLayer);
 
         this.layer.background = config.trash.background;
         this.layer.cornerRadius = config.cornerRadius;
@@ -989,10 +1016,33 @@ export class Trash extends View {
         super.layout();
         this.dragController.registerTarget(this);
         const titleSize = this.titleLayer.getNaturalSize();
+
+        this.iconLayer.position = [
+            (this.size[0] - config.trash.iconSize * 2) / 2,
+            (this.size[1] - config.trash.iconSize * 2) / 2,
+        ];
+        this.iconLayer.scale = 2;
+
         this.titleLayer.position = [
             (this.size[0] - titleSize[0]) / 2,
-            (this.size[1] - titleSize[1]) / 2,
+            this.iconLayer.position[1] + config.trash.iconSize * 2 + 4,
         ];
+
+        this.canRectLayer.fill = config.trash.fill;
+        this.lidRectLayer.fill = config.trash.fill;
+        this.canLinesLayer.fill = config.trash.fillLines;
+        this.canRectLayer.stroke = config.trash.outline;
+        this.canRectLayer.strokeWidth = config.trash.outlineWidth;
+        this.lidRectLayer.stroke = config.trash.outline;
+        this.lidRectLayer.strokeWidth = config.trash.outlineWidth;
+        this.lidHandleLayer.fill = [0, 0, 0, 0];
+        this.lidHandleLayer.stroke = config.trash.outline;
+        this.lidHandleLayer.strokeWidth = config.trash.outlineWidth;
+
+        this.lidLayer.rotation = this.active ? -30 : 0;
+        this.lidLayer.position = this.active ? [-2, 4] : [0, 0];
+        this.canLayer.rotation = this.active ? 10 : 0;
+        this.canLayer.position = this.active ? [2, 2] : [0, 0];
 
         this.layer.background = this.isLeftTrash
             ? (this.active ? config.trash.bigActiveBackground : config.trash.bigBackground)
@@ -1003,6 +1053,7 @@ export class Trash extends View {
 
     *iterSublayers () {
         yield this.titleLayer;
+        yield this.iconLayer;
     }
 }
 
