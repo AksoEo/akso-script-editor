@@ -98,25 +98,7 @@ export class Library extends View implements HelpTagged {
                 new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'n', value: 0 })),
                 new ExprFactory(this, ctx => ({ ctx, parent: null, type: 's', value: '' })),
                 new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'm', value: [] })),
-                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'r', name: '' })),
                 new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'l', items: [] })),
-                new ExprFactory(this, ctx => {
-                    const expr: Expr.FnDef = {
-                        ctx,
-                        parent: null,
-                        type: 'f',
-                        params: [],
-                        body: {
-                            ctx,
-                            parent: null,
-                            type: 'd',
-                            defs: new Set(),
-                            floatingExpr: new Set(),
-                        },
-                    };
-                    expr.body.parent = expr;
-                    return expr;
-                }),
                 new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'w', matches: [] })),
             ];
             tab.itemList.needsLayout = true;
@@ -155,11 +137,35 @@ export class Library extends View implements HelpTagged {
     }
     updateTab (tab) {
         if (tab.id === 'references') {
+            if (!tab.itemList._byFormVar) tab.itemList._byFormVar = new WeakMap();
             if (!tab.itemList._byExtDef) tab.itemList._byExtDef = new WeakMap();
             if (!tab.itemList._byDef) tab.itemList._byDef = new WeakMap();
+            const byFormVar = tab.itemList._byFormVar;
             const byExtDef = tab.itemList._byExtDef;
             const byDef = tab.itemList._byDef;
             tab.itemList.items = [];
+
+            for (const fvar of this.defs.defs.ctx.formVars) {
+                if (!byFormVar.has(fvar)) byFormVar.set(fvar, {});
+                const state = byFormVar.get(fvar);
+                const name = '@' + fvar.name;
+
+                if (name !== state.name) {
+                    state.name = name;
+                    if (!state.refExpr) {
+                        state.refExpr = new ExprFactory(this, ctx => ({
+                            ctx,
+                            parent: null,
+                            type: 'r',
+                            name,
+                        }));
+                    } else {
+                        state.refExpr.update(ctx => ({ ctx, type: 'r', name }));
+                    }
+                }
+
+                if (state.refExpr) tab.itemList.items.push(state.refExpr);
+            }
 
             for (const script of this.defs.defs.ctx.externalDefs) {
                 for (const name in script) {

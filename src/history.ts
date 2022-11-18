@@ -10,7 +10,8 @@ export type HistoryLabel =
     | 'remove-node'
     | 'slot-before-insert'
     | 'slot-insert-expr'
-    | 'commit-code';
+    | 'commit-code'
+    | 'library-instantiate';
 
 export interface HistoryEntry {
     label: HistoryLabel;

@@ -99,6 +99,11 @@ class PreviewLine extends View {
     }
     set contents (v) {
         if (shallowEq(v, this.#contents)) return;
+        if (!Array.isArray(v)) {
+            this.#contents = [v];
+            this.needsLayout = true;
+            return;
+        }
         this.#contents = v.slice();
         this.needsLayout = true;
     }

@@ -63,8 +63,6 @@ class FormVarItem extends View {
                 type: 'u',
                 value: null,
             };
-        } else {
-            this.unownedVariable = true;
         }
         this.var = _var;
         this.var.ctx = this.modelCtx; // for the form var expr view
@@ -183,13 +181,6 @@ class FormVarItem extends View {
         this.exprView.needsLayout = true;
     };
 
-    willDetach () {
-        super.willDetach();
-        if (!this.unownedVariable) {
-            const idx = this.ctx.modelCtx.formVars.indexOf(this.var);
-            if (idx !== -1) this.ctx.modelCtx.formVars.splice(idx, 1);
-        }
-    }
     onRemove = () => {
         const t = new Transaction(1, 0.3);
         const idx = this.ctx.modelCtx.formVars.indexOf(this.var);

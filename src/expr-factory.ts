@@ -63,10 +63,21 @@ export class ExprFactory extends View {
         const exprView = getProtoView(expr, ExprView);
         exprView.dragController = this.lib.defs.dragController;
         exprView.decorationOnly = true;
-        this.lib.defs.addFloatingExpr(expr);
+
         const defsPos = this.lib.defs.absolutePosition;
         const ownPos = this.absolutePosition;
-        exprView.position = [ownPos[0] - defsPos[0], ownPos[1] - defsPos[1]];
+        const defs = this.lib.defs;
+
+        this.ctx.history.commitChange('library-instantiate', () => {
+            defs.addFloatingExpr(expr);
+            exprView.position = [ownPos[0] - defsPos[0], ownPos[1] - defsPos[1]];
+            defs.defs.ctx.notifyMutation(defs.defs);
+
+            return () => {
+                defs.removeFloatingExpr(expr);
+            };
+        });
+
         return expr;
     }
 
