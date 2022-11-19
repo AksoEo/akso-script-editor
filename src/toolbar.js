@@ -9,9 +9,10 @@ export class Toolbar extends View {
 
         this.buttons = [
             new Button(config.toolbar.buttons.code, this.toggleCodeView),
+            new Button(config.toolbar.buttons.test, this.toggleTestMode),
+            new Button(config.toolbar.buttons.dup, this.toggleDuplicate),
             new Button(config.toolbar.buttons.graph, this.toggleGraphView),
             new Button(config.toolbar.buttons.help, this.toggleHelp),
-            new Button(config.toolbar.buttons.dup, this.toggleDuplicate),
             new Button(config.toolbar.buttons.undo, this.undo),
             new Button(config.toolbar.buttons.redo, this.redo),
         ];
@@ -43,6 +44,18 @@ export class Toolbar extends View {
         }
     };
 
+    toggleTestMode = (testButton) => {
+        this.ctx.isInTestMode = !this.ctx.isInTestMode;
+        testButton.active = this.ctx.isInTestMode;
+
+        this.canvas.didToggleTestMode();
+    };
+
+    toggleDuplicate = (dupButton) => {
+        this.ctx.isInDupMode = !this.ctx.isInDupMode;
+        dupButton.active = this.ctx.isInDupMode;
+    };
+
     toggleHelp = (helpButton) => {
         const enabled = this.canvas.isInHelpMode;
         helpButton.active = !enabled;
@@ -56,11 +69,6 @@ export class Toolbar extends View {
             helpButton.active = false;
             this.canvas.isInHelpMode = false;
         };
-    }
-
-    toggleDuplicate = (dupButton) => {
-        this.ctx.isInDupMode = !this.ctx.isInDupMode;
-        dupButton.active = this.ctx.isInDupMode;
     };
 
     undo = () => {

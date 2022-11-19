@@ -167,7 +167,7 @@ const config = {
     },
 
     trash: {
-        title: 'Ŝovi tien ĉi por forigi',
+        title: 'Tiru tien ĉi por forigi',
         background: [0.7, 0.7, 0.7, 0.4],
         activeBackground: [1, 0.3, 0.2, 0.5],
         bigBackground: [0.95, 0.95, 0.95, 0.5],
@@ -211,6 +211,7 @@ const config = {
         buttons: {
             code: 'Kodo',
             graph: 'Grafeo',
+            test: '[[Test Mode]]',
             help: 'Helpo',
             dup: 'Kopii',
             undo: '[[Undo]]',
@@ -498,8 +499,8 @@ const config = {
         ts_fmt: ['tempindiko'],
         ts_add: ['aldona unuo', 'tempindiko', 'valoro'],
         ts_sub: ['rezulta unuo', 'malpliigato', 'subtrahanto'],
-        ts_get: ['kampo', 'tempindiko', 'horzono'],
-        ts_set: ['kampo', 'tempindiko', 'horzono', 'valoro'],
+        ts_get: ['kampo', 'horzono', 'tempindiko'],
+        ts_set: ['kampo', 'horzono', 'tempindiko', 'valoro'],
         currency_fmt: ['valuto', 'valoro'],
         country_fmt: ['landokodo'],
         phone_fmt: ['telefonnumero'],
@@ -743,7 +744,7 @@ const stdlibDocs = {
     date_add: [
         { type: 'text', content: '[[Adds a duration to a date.]]' },
     ],
-    date_today: [{ type: 'text', content: '[[Returns today’s date.]]' }],
+    date_today: [{ type: 'text', content: '[[Returns today’s date, formatted as YYYY-MM-DD.]]' }],
     date_fmt: [{ type: 'text', content: '[[Formats the date into a human-readable string in Esperanto.]]' }],
     date_get: [{ type: 'text', content: '[[Returns the desired property of the input date, or null if the input is not a date.]]' }],
     date_set: [{ type: 'text', content: '[[Returns a new date with the desired property changed, or returns null if the input is not a date.]]' }],
@@ -753,8 +754,29 @@ const stdlibDocs = {
     ts_from_unix: [{ type: 'text', content: '[[Converts a unix epoch time number to a timestamp.]]' }],
     ts_to_unix: [{ type: 'text', content: '[[Converts a timestamp to a unix epoch time number.]]' }],
     ts_from_date: [{ type: 'text', content: '[[Creates a timestamp from a date and a time.]]' }],
-    ts_get: [{ type: 'text', content: '[[Returns the desired property of the input timestamp.]]' }],
-    ts_set: [{ type: 'text', content: '[[Returns a new timestamp with the desired property changed.]]' }],
+    ts_get: [
+        { type: 'text', content: '[[Returns the desired property of the input timestamp.]]' },
+        {
+            type: 'node',
+            node: hNodes.call(hNodes.refStdlib('ts_get'),
+                hNodes.str('h'),
+                hNodes.num(0),
+                hNodes.ref('dato')),
+        },
+        { type: 'text', content: '[[The time zone is the UTC offset in hours.]]' },
+    ],
+    ts_set: [
+        { type: 'text', content: '[[Returns a new timestamp with the desired property changed.]]' },
+        {
+            type: 'node',
+            node: hNodes.call(hNodes.refStdlib('ts_set'),
+                hNodes.str('h'),
+                hNodes.num(0),
+                hNodes.ref('dato'),
+                hNodes.num(5)),
+        },
+        { type: 'text', content: '[[The time zone is the UTC offset in hours.]]' },
+    ],
     ts_add: [{ type: 'text', content: '[[Adds a time quantity to a timestamp and returns the result.]]' }],
     ts_sub: [{ type: 'text', content: '[[Subtracts a time quanitty from a timestamp and returns the result.]]' }],
     ts_to_date: [{ type: 'text', content: '[[Returns the date portion of a timestam.]]' }],

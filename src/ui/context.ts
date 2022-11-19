@@ -25,6 +25,7 @@ export interface ViewContext {
     window?: Window;
     helpSheet?: HelpSheet;
     isInDupMode?: boolean;
+    isInTestMode?: boolean;
     history: History;
 }
 

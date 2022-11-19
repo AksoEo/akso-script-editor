@@ -267,7 +267,7 @@ export class Dropdown extends View {
     }
 
     expand (x, y) {
-        const t = new Transaction(1, 0.3);
+        const t = new Transaction(1, 0.1);
         this.highlight = [...this.labels.keys()].indexOf(this.expr.value);
         this.expanded = true;
         this.dragStart = [x, y];

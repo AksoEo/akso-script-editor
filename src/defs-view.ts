@@ -591,7 +591,7 @@ export class DefView extends View {
 
         // we always want a preview if it's an error
         let wantPreview = !result.analysis.valid;
-        if (!wantPreview && this.def.expr) {
+        if (!wantPreview && this.def.expr && this.ctx?.isInTestMode) {
             const previewTypes = ['c', 'r', 'l', 'w'];
             if (previewTypes.includes(this.def.expr.type)) wantPreview = true;
         }

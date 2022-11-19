@@ -519,6 +519,8 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
             this.peekView.size = this.layer.size;
         },
         onPointerEnter () {
+            if (!this.ctx.isInTestMode) return;
+
             const result = evalExpr(this.expr);
             if (!result) return;
 
@@ -1065,6 +1067,8 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
             if (!this._isDemo) yield this.peekView;
         },
         onPointerEnter () {
+            if (!this.ctx.isInTestMode) return;
+
             const result = evalExpr(this.expr);
             if (!result) return;
 
@@ -1102,7 +1106,7 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
             delete this.textLayer;
         },
         layout () {
-            this.textLayer.text = config.primitives.functionLabel + '(' + this.expr.params.join(', ') + ')';
+            this.textLayer.text = config.primitives.functionLabel + '(' + this.expr.params.join(', ') + ') …';
 
             const textSize = this.textLayer.getNaturalSize();
             this.layer.size = [textSize[0] + 16, textSize[1] + 4];

@@ -167,6 +167,12 @@ export class CanvasView extends View {
         }
     }
 
+    didToggleTestMode() {
+        this.modelCtx.notifyMutation(this.root);
+        this.modelCtx.notifyFormVarsMutation();
+        this.modelCtx.flushMutation();
+    }
+
     isInHelpMode = false;
     enterHelpMode() {
         this.isInHelpMode = true;
