@@ -9,6 +9,7 @@ export { write } from './asct/write';
 export { DefsView } from './defs-view';
 export { ExprSlot, ExprView } from './expr-view';
 export { viewPool, getProtoView } from './proto-pool';
+export * as model from './model';
 
 export { Window, RenderViewRoot };
 
