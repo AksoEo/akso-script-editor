@@ -6,6 +6,7 @@ import postcss from 'rollup-plugin-postcss';
 import offMainThread from '@surma/rollup-plugin-off-main-thread';
 import { eslint } from 'rollup-plugin-eslint';
 import path from 'node:path';
+import pkg from './package.json' assert { type: 'json' };
 
 const isTestEnv = process.env.NODE_ENV === 'test';
 
@@ -45,18 +46,26 @@ const inputOptions = {
             plugins: ['@babel/plugin-proposal-class-properties'],
             exclude: ['node_modules/**'],
         }),
+        addBackCssImport(),
     ],
-    external: isTestEnv ? [] : [
-        'google-libphonenumber',
-        '@tejo/akso-script',
-        'codemirror',
-        'codemirror/addon/mode/simple',
-    ],
+    external: isTestEnv ? [] : Object.keys(pkg.dependencies),
 };
 const outputOptions = {
     dir: 'dist',
     format: 'esm',
 };
+
+function addBackCssImport() {
+    return {
+        name: 'add-back-css-import-removed-by-rollup-postcss',
+        banner(chunk) {
+            if (chunk.isEntry && chunk.name === 'index') {
+                return `import './asce.css';\n`;
+            }
+            return null;
+        },
+    };
+}
 
 export default {
     output: outputOptions,

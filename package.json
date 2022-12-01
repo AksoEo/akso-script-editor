@@ -8,7 +8,8 @@
   "author": "",
   "license": "ISC",
   "scripts": {
-    "prepare": "npx rollup -c",
+    "prepare": "npm run build",
+    "build": "npx rollup -c",
     "watch-test": "env NODE_ENV=test rollup -c --watch"
   },
   "devDependencies": {
