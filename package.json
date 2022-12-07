@@ -4,7 +4,9 @@
   "description": "",
   "main": "dist/index.js",
   "module": "dist/index.js",
-  "sideEffects": ["*.css"],
+  "sideEffects": [
+    "*.css"
+  ],
   "author": "",
   "license": "ISC",
   "scripts": {
@@ -37,7 +39,7 @@
     "@codemirror/state": "^6.1.3",
     "@codemirror/view": "^6.4.2",
     "@lezer/highlight": "^1.1.2",
-    "@tejo/akso-script": "^0.2.6",
+    "@tejo/akso-script": "^0.2.8",
     "codemirror": "^6.0.1",
     "dagre": "^0.8.5",
     "pointer-tracker": "^2.3.0"
