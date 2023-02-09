@@ -46,8 +46,8 @@ const inputOptions = {
             plugins: ['@babel/plugin-proposal-class-properties'],
             exclude: ['node_modules/**'],
         }),
-        addBackCssImport(),
-    ],
+        !isTestEnv && addBackCssImport(),
+    ].filter(x => x),
     external: isTestEnv ? [] : Object.keys(pkg.dependencies),
 };
 const outputOptions = {

@@ -148,7 +148,7 @@ function writeExpr (expr) {
     if (!expr || expr.type === 'u') return new Frag('null', ATOM_PREC);
     if (expr.type === 'b') return new Frag(expr.value ? 'yes' : 'no', ATOM_PREC);
     if (expr.type === 'n') return new Frag(expr.value.toString(), ATOM_PREC);
-    if (expr.type === 's') return new Frag(JSON.stringify(expr.value), ATOM_PREC);
+    if (expr.type === 's') return new Frag('"' + expr.value + '"', ATOM_PREC);
     if (expr.type === 'm') return writeMatrix(expr.value);
     if (expr.type === 'l') return writeList(expr);
     if (expr.type === 'r') return writeIdent(expr.name);

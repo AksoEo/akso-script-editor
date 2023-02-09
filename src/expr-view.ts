@@ -65,10 +65,25 @@ export class ExprSlot extends View implements DragSlot {
     }
     set expr (value: Expr.Any | null) {
         if (this.#expr === value) return;
-        if (this.#expr) this.removeSubview(getProtoView(this.#expr, ExprView));
+        if (this.#expr) {
+            const exprView = getProtoView(this.#expr, ExprView);
+            if (exprView.parent) this.removeSubview(exprView);
+        }
         this.#expr = value;
         this.needsLayout = true;
-        if (this.#expr) this.addSubview(getProtoView(this.#expr, ExprView));
+        this.#updateExprVisible();
+    }
+
+    #updateExprVisible () {
+        if (this.#expr) {
+            const exprView = getProtoView(this.#expr, ExprView);
+            const shouldBeVisible = !this.#exprUI;
+            if (shouldBeVisible && !exprView.parent) {
+                this.addSubview(exprView);
+            } else if (!shouldBeVisible && exprView.parent) {
+                this.removeSubview(exprView);
+            }
+        }
     }
 
     get exprUI (): (View & ExprUI) | null {
@@ -79,6 +94,7 @@ export class ExprSlot extends View implements DragSlot {
         if (this.#exprUI) this.removeSubview(this.#exprUI);
         this.#exprUI = value;
         if (this.#exprUI) this.addSubview(this.#exprUI);
+        this.#updateExprVisible();
     }
 
     get refOnly (): boolean {
@@ -107,7 +123,7 @@ export class ExprSlot extends View implements DragSlot {
         return !!this.exprUI || !this.expr;
     }
 
-    acceptsExpr (expr) {
+    acceptsExpr (expr: Expr.Any) {
         if (this.refOnly) return expr.type === 'r';
         return true;
     }
@@ -688,22 +704,22 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
             this.layer.background = config.primitives.string;
             this.layer.stroke = config.primitives.stringOutline;
             this.layer.strokeWidth = config.primitives.outlineWeight;
-            this.textLayer = new TextLayer();
-            this.textLayer.font = config.identFont;
-            this.textLayer.color = config.primitives.color;
+            this.textLayers = [];
+            this.lineHeight = 0;
 
             this.iconLayer = new PathLayer();
             this.iconLayer.path = config.icons.string;
             this.iconLayer.fill = config.primitives.iconColor;
         },
         deinit () {
-            delete this.textLayer;
+            delete this.lineHeight;
+            delete this.textLayers;
             delete this.iconLayer;
         },
         tapAction () {
             this.ctx.beginInput(
                 this.layer.absolutePosition,
-                this.size,
+                [this.size[0], this.size[1], this.lineHeight],
                 this.expr.value,
                 { font: config.identFont },
             ).then(value => {
@@ -722,17 +738,62 @@ const EXPR_VIEW_IMPLS: { [k: string]: ExprImpl } = {
             });
         },
         layout () {
-            this.textLayer.text = `“${this.expr.value}”`;
-
             const iconSize = config.icons.size;
             this.iconLayer.position = [4, 4];
 
-            const textSize = this.textLayer.getNaturalSize();
-            this.layer.size = [textSize[0] + iconSize + 4 + config.primitives.paddingX * 2, textSize[1] + config.primitives.paddingYS * 2];
-            this.textLayer.position = [4 + iconSize + 4, this.layer.size[1] / 2];
+            const textLines = this.expr.value.split('\n');
+
+            while (this.textLayers.length < textLines.length) {
+                const layer = new TextLayer();
+                layer.font = config.identFont;
+                layer.color = config.primitives.color;
+                this.textLayers.push(layer);
+            }
+            while (this.textLayers.length > textLines.length) {
+                this.textLayers.pop();
+            }
+
+            let maxWidth = 0;
+            let height = 0;
+            const heights = [];
+            for (let i = 0; i < textLines.length; i++) {
+                const isFirst = i === 0;
+                const isLast = i === textLines.length - 1;
+                const layer = this.textLayers[i];
+                const line = textLines[i];
+
+                if (isFirst && isLast) {
+                    layer.text = `“${line}”`;
+                } else if (isFirst) {
+                    layer.text = `“${line}`;
+                } else if (isLast) {
+                    layer.text = `${line}”`;
+                } else {
+                    layer.text = line;
+                }
+
+                const textSize = layer.getNaturalSize();
+                maxWidth = Math.max(textSize[0], maxWidth);
+                height += textSize[1];
+                heights.push(textSize[1]);
+            }
+            this.lineHeight = height / textLines.length;
+
+            const layerHeight = height + config.primitives.paddingYS * 2;
+            this.layer.size = [
+                maxWidth + iconSize + 4 + config.primitives.paddingX * 2,
+                layerHeight,
+            ];
+
+            let y = (layerHeight - height) / 2;
+            for (let i = 0; i < this.textLayers.length; i++) {
+                const layer = this.textLayers[i];
+                layer.position = [4 + iconSize + 4, y + heights[i] / 2];
+                y += heights[i];
+            }
         },
         *iterSublayers () {
-            yield this.textLayer;
+            for (const layer of this.textLayers) yield layer;
             yield this.iconLayer;
         },
     },

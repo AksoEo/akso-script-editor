@@ -6,8 +6,9 @@ export class TextInput {
         this.node.style.zIndex = 3;
         this.node.style.top = this.node.style.right = this.node.style.left = this.node.style.bottom = 0;
         this.node.style.display = 'none';
+        this.allowsMultiline = false;
 
-        this.input = document.createElement('input');
+        this.input = document.createElement('textarea');
         this.node.appendChild(this.input);
 
         this.input.addEventListener('click', e => {
@@ -15,7 +16,9 @@ export class TextInput {
         });
         this.input.addEventListener('keydown', e => {
             if (e.key === 'Escape') this.endInput(true);
-            if (e.key === 'Enter') this.endInput();
+            if ((!this.allowsMultiline || e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                this.endInput();
+            }
         });
         Object.assign(this.input.style, {
             padding: '0 2px',
@@ -32,7 +35,7 @@ export class TextInput {
 
     inputOriginal = null;
     inputPromise = null;
-    beginInput = ([x, y], [width, height], text, style = {}) => new Promise((resolve) => {
+    beginInput = ([x, y], [width, height, lineHeight], text, style = {}) => new Promise((resolve) => {
         this.endInput();
 
         this.node.style.display = 'block';
@@ -40,7 +43,8 @@ export class TextInput {
         this.input.style.transform = `translate(${x}px, ${y}px)`;
         this.input.style.width = width + 'px';
         this.input.style.height = height + 'px';
-        this.input.style.lineHeight = height + 'px';
+        this.input.style.lineHeight = (lineHeight || height) + 'px';
+        this.allowsMultiline = !!lineHeight;
         this.input.value = text;
         this.inputOriginal = text;
         this.input.focus();

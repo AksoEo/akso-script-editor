@@ -268,8 +268,14 @@ const string = spanned((str) => {
         if (!escapeNext && c === '"') {
             break;
         }
+        if (escapeNext) {
+            if (c === 'n') contents += '\n';
+            else if (c === 't') contents += '\t';
+            else contents += c;
+        } else {
+            contents += c;
+        }
         escapeNext = false;
-        contents += c;
     }
     return new StringToken(contents);
 });

@@ -75,7 +75,7 @@ editor.load({
     thing: { t: 'u' },
     boolean: { t: 'b', v: true },
     number: { t: 'n', v: 142 },
-    string: { t: 's', v: 'cats are very cute' },
+    string: { t: 's', v: 'multiline test\nstring' },
     string2: { t: 'c', f: 'string' },
     cond: { t: 'w', m: [{ c: 'boolean', v: 'string' }, { v: 'string2' }] },
     make_asc_list: {
@@ -127,6 +127,8 @@ editor.load({
     _example1: { t: 'c', f: 'make_asc_list', a: ['_example0'] },
     example: { t: 'c', f: 'map', a: ['fib', '_example1'] },
     'example 2': { t: 'c', f: 'map', a: ['fac', '_example1'] },
+    '_date_thing0': { t: 's', v: 'years' },
+    date_thing: { t: 'c', f: 'date_sub', a: ['_date_thing0', '_example0', '_example0'] },
 });
 window.editor = editor;
 document.body.style.margin = '0';
