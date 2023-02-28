@@ -261,16 +261,16 @@ const string = spanned((str) => {
     let contents = '';
     let escapeNext = false;
     while ((c = str.next())) {
-        if (c === '\\') {
+        if (!escapeNext && c === '\\') {
             escapeNext = true;
             continue;
         }
         if (!escapeNext && c === '"') {
             break;
-        }
-        if (escapeNext) {
+        } else if (escapeNext) {
             if (c === 'n') contents += '\n';
             else if (c === 't') contents += '\t';
+            else if (c === '\\') contents += '\\';
             else contents += c;
         } else {
             contents += c;

@@ -159,7 +159,7 @@ export namespace Expr {
     export type MatrixValue = null | boolean | number | string | MatrixValue[];
     export interface Matrix extends BaseExpr {
         type: 'm';
-        value: MatrixValue;
+        value: MatrixValue[];
     }
     export interface List extends BaseExpr {
         type: 'l';
