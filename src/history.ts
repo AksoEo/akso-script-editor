@@ -12,7 +12,8 @@ export type HistoryLabel =
     | 'slot-before-insert'
     | 'slot-insert-expr'
     | 'commit-code'
-    | 'library-instantiate';
+    | 'library-instantiate'
+    | 'clear';
 
 export interface HistoryEntry {
     label: HistoryLabel;

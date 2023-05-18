@@ -216,6 +216,7 @@ const config = {
             dup: 'Kopii',
             undo: 'Malfari',
             redo: 'Refari',
+            clear: '[[Clear]]',
 
             cancel: 'Nuligi',
             save: 'Konservi',

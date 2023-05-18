@@ -16,6 +16,7 @@ export class Toolbar extends View {
             new Button(config.toolbar.buttons.help, this.toggleHelp),
             new Button(config.toolbar.buttons.undo, this.undo),
             new Button(config.toolbar.buttons.redo, this.redo),
+            new Button(config.toolbar.buttons.clear, this.clear),
         ];
 
         this.fileButtons = [
@@ -91,6 +92,17 @@ export class Toolbar extends View {
 
     redo = () => {
         this.ctx.history.redo();
+    };
+
+    clear = () => {
+        this.ctx.history.commitChange('clear', () => {
+            const root = this.canvas.getRawRoot();
+            this.canvas.setRawRoot({});
+
+            return () => {
+                this.canvas.setRawRoot(root);
+            };
+        });
     };
 
     cancel = () => this.editor.onCancel();
