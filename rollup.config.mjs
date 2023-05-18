@@ -3,6 +3,7 @@ import babel from '@rollup/plugin-babel';
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import postcss from 'rollup-plugin-postcss';
+import json from '@rollup/plugin-json';
 import offMainThread from '@surma/rollup-plugin-off-main-thread';
 import { eslint } from 'rollup-plugin-eslint';
 import path from 'node:path';
@@ -13,6 +14,7 @@ const isTestEnv = process.env.NODE_ENV === 'test';
 const inputOptions = {
     input: 'src/index.ts',
     plugins: [
+        json(),
         postcss({
             extract: path.resolve('dist/asce.css'),
         }),

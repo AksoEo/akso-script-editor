@@ -136,7 +136,6 @@ export class DragController implements IExprDragController {
                     return () => {
                         this.defs.removeFloatingExpr(expr);
                         removal.undo();
-                        console.log(expr);
                     };
                 }, expr);
             }

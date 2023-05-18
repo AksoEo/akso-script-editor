@@ -70,6 +70,13 @@ export default class Editor {
         return this.editor.getRawRoot();
     }
 
+    get onCancel () {
+        return this.editor.onCancel;
+    }
+    set onCancel (f) {
+        this.editor.onCancel = f;
+    }
+
     get onSave () {
         return this.editor.onSave;
     }

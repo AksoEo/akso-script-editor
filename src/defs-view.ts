@@ -990,7 +990,7 @@ export class Trash extends View {
     get acceptsDef () {
         return true; // accepts everything
     }
-    beginTentative (expr) {
+    beginTentative (expr: Expr.Any) {
         void expr;
         const t = new Transaction(1, 0.3);
         this.active = true;
@@ -1003,19 +1003,27 @@ export class Trash extends View {
         this.layout();
         t.commit();
     }
-    insertExpr (expr) {
+    insertExpr (expr: Expr.Any) {
         const t = new Transaction(1, 0.3);
         this.active = false;
         this.layout();
         t.commit();
         void expr;
     }
-    insertDef (def) {
+    insertDef (def: Def) {
         const t = new Transaction(1, 0.3);
         this.active = false;
         this.layout();
         t.commit();
-        removeNode(def);
+        this.ctx.history.commitChange('remove-node', () => {
+            const removal = removeNode(def);
+
+            return () => {
+                removal.undo();
+                const defView = getProtoView(def, DefView);
+                defView.layer.scale = 1;
+            };
+        });
     }
 
     layout () {

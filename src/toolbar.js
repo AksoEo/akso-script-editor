@@ -1,4 +1,5 @@
 import { View, TextLayer, Transaction, Gesture } from './ui';
+import { version as pkgVersion } from '../package.json';
 import config from './config';
 
 export class Toolbar extends View {
@@ -18,10 +19,23 @@ export class Toolbar extends View {
         ];
 
         this.fileButtons = [
-            new Button(config.toolbar.buttons.save, this.save, true),
+            {
+                canShow: () => !!this.editor?.onSave,
+                button: new Button(config.toolbar.buttons.save, this.save, true),
+            },
+            {
+                canShow: () => !!this.editor?.onCancel,
+                button: new Button(config.toolbar.buttons.cancel, this.cancel),
+            },
         ];
 
+        this.versionLabel = new TextLayer();
+        this.versionLabel.text = `v${pkgVersion}`;
+        this.versionLabel.font = config.identFont;
+        this.versionLabel.color = config.toolbar.versionColor;
+
         for (const b of this.buttons) this.addSubview(b);
+        this.addSublayer(this.versionLabel);
     }
 
     toggleGraphView = (graphButton) => {
@@ -79,6 +93,7 @@ export class Toolbar extends View {
         this.ctx.history.redo();
     };
 
+    cancel = () => this.editor.onCancel();
     save = () => this.editor.onSave();
 
     layout () {
@@ -92,18 +107,24 @@ export class Toolbar extends View {
         }
 
         x = this.size[0] - 16;
-        for (const b of this.fileButtons) {
+        for (const { canShow, button: b } of this.fileButtons) {
+            if (!canShow()) continue;
             b.layoutIfNeeded();
             x -= b.size[0];
             b.position = [x, (this.size[1] - b.size[1]) / 2];
             x -= 8;
         }
+
+        const versionLabelSize = this.versionLabel.getNaturalSize();
+        x -= versionLabelSize[0];
+        this.versionLabel.position = [x, this.layer.size[1] / 2];
     }
 
     *iterSubviews () {
-        if (!this.editor || !this.editor.onSave) return;
         for (const b of this.fileButtons) {
-            yield b;
+            if (b.canShow()) {
+                yield b.button;
+            }
         }
     }
 }

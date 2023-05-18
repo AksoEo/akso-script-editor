@@ -30,6 +30,15 @@ export class EditorView extends View {
         this.canvasView.needsLayout = true;
     }
 
+    #onCancel = null;
+    get onCancel () {
+        return this.#onCancel;
+    }
+    set onCancel (f) {
+        this.#onCancel = f;
+        this.toolbar.flushSubviews();
+    }
+
     #onSave = null;
     get onSave () {
         return this.#onSave;

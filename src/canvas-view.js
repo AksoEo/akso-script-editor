@@ -95,7 +95,9 @@ export class CanvasView extends View {
     };
     #onFlushMutation = () => {
         this.defsView.layoutIfNeeded();
-        for (const m of this.#mutations) m.layoutIfNeeded();
+        if (this.#mutations) {
+            for (const m of this.#mutations) m.layoutIfNeeded();
+        }
         this.#mutations = null;
     };
 

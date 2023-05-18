@@ -217,8 +217,10 @@ const config = {
             undo: 'Malfari',
             redo: 'Refari',
 
+            cancel: 'Nuligi',
             save: 'Konservi',
         },
+        versionColor: [0, 0, 0, 0.5],
     },
 
     scrollbar: {
