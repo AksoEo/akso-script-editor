@@ -106,7 +106,12 @@ export class Toolbar extends View {
     };
 
     cancel = () => this.editor.onCancel();
-    save = () => this.editor.onSave();
+    save = () => {
+        if (this.canvas.isInCodeMode) {
+            this.canvas.exitCodeMode();
+        }
+        this.editor.onSave();
+    };
 
     layout () {
         super.layout();
