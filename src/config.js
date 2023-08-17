@@ -41,8 +41,11 @@ const config = {
 
     maxEvalIterations: 4096,
 
-    // width to align the left hand side at
+    // width to align the left hand side of defintions at
     lhsAlignWidth: 200,
+
+    // width of the sidebar
+    sidebarWidth: 250,
 
     peek: {
         background: [0.2, 0.2, 0.2, 1],
@@ -149,9 +152,12 @@ const config = {
     defs: {
         background: [0.9, 0.9, 0.9, 1],
         newDefName: n => `nova difino (${n})`,
+        padding: 2,
+        gap: 2,
     },
     def: {
         cornerRadius: 12,
+        listCornerRadius: 4,
         padding: 8,
         background: [1, 1, 1, 1],
     },

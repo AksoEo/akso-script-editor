@@ -74,11 +74,11 @@ export class HelpTagView extends View {
     }
 
     layout() {
-        this.layer.position = [
+        this.position = [
             this.tag.pos[0] - this.parent.absolutePosition[0] - 2,
             this.tag.pos[1] - this.parent.absolutePosition[1] - 2,
         ];
-        this.layer.size = [
+        this.size = [
             this.tag.size[0] + 4,
             this.tag.size[1] + 4,
         ];
@@ -88,8 +88,9 @@ export class HelpTagView extends View {
             : 0;
         this.layer.stroke = helpContent.highlight;
         this.layer.background = this.hovering
-            ? [...helpContent.highlight.slice(0, 3), 0.4]
+            ? [...helpContent.highlight.slice(0, 3), 0.4] as [number, number, number, number]
             : [0, 0, 0, 0];
+        return this.size;
     }
 }
 
@@ -120,10 +121,11 @@ export class HelpTagsView extends View {
     }
 
     layout() {
-        super.layout();
+        const size = super.layout();
         const tx = new Transaction();
         this.layer.background = [0, 0, 0, 0.1];
         tx.commit();
+        return size;
     }
 
     get wantsRootSize() {

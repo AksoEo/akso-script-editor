@@ -2,6 +2,7 @@ import { Window, View, Gesture, Transaction, Layer, TextLayer, PathLayer } from 
 import { ValueView } from './value-view';
 import { Tooltip } from './tooltip';
 import config from './config';
+import {Vec2} from "./spring";
 
 function shallowEq (a, b) {
     if (Array.isArray(a) && Array.isArray(b)) {
@@ -32,9 +33,7 @@ export class MatrixPreview extends View {
         this.needsLayout = true;
     }
 
-    get decorationOnly () {
-        return true;
-    }
+    decorationOnly = true;
 
     #previewLines = [];
 
@@ -87,7 +86,7 @@ export class MatrixPreview extends View {
             width = Math.max(width, ln.size[0]);
         }
 
-        this.layer.size = [width, Math.max(0, y)];
+        return new Vec2(width, Math.max(0, y));
     }
 }
 class PreviewLine extends View {
@@ -130,6 +129,8 @@ class PreviewLine extends View {
 
         this.cellSizes = this.#items.map(item => item.size[0]);
         this.height = maxHeight;
+
+        return this.size;
     }
     layoutPart2 (cellSizes) {
         const height = this.height;
@@ -179,8 +180,8 @@ class PreviewItem extends View {
 
         this.text.text = label;
         const textSize = this.text.getNaturalSize();
-        this.layer.size = textSize;
         this.text.position = [0, this.layer.size[1] / 2];
+        return textSize;
     }
 }
 

@@ -2,11 +2,13 @@ import { BaseLayer, svgNS, Transaction } from './layer/base';
 import { ViewContext } from './context';
 import { View } from './view';
 import { History } from '../history';
+import { Layer } from './layer';
+import { Window } from './window';
 
 /// Like a ViewRoot, but render-only, and sizes itself to fit content.
 export class RenderViewRoot {
     /// a stack of windows. the topmost is the active one.
-    windows = [];
+    windows: Window[] = [];
     wantsChildLayout = true;
 
     node: HTMLDivElement;
@@ -44,17 +46,17 @@ export class RenderViewRoot {
         };
     }
 
-    setOverflow (value) {
+    setOverflow (value: string) {
         this.svgNode.style.overflow = value;
     }
 
     /// Pushes a window.
-    pushWindow (view) {
-        this.windows.push(view);
-        this.svgNode.appendChild(view.layer.node);
-        view.layer.didMount(this.ctx);
-        view.didAttach(this.ctx);
-        view.didMount(null);
+    pushWindow (win: Window) {
+        this.windows.push(win);
+        this.svgNode.appendChild(win.layer.node);
+        win.layer.didMount(this.ctx);
+        win.didAttach(this.ctx);
+        win.didMount(null);
 
         this.layout();
     }
@@ -68,12 +70,22 @@ export class RenderViewRoot {
         }
     }
 
-    #getNodesAtPointInner = (x, y, ox, oy, layer, targets) => {
-        if (layer.owner && layer.owner.decorationOnly) return;
+    #getNodesAtPointInner = (
+        x: number,
+        y: number,
+        ox: number,
+        oy: number,
+        layer: Layer,
+        targets: {
+            target: View,
+            x: number,
+            y: number,
+        }[]) => {
+        if (layer.owner?.decorationOnly) return;
 
         let doSublayers = false;
         const pos = layer.position;
-        const size = layer.size || [0, 0];
+        const size = layer.size;
 
         const px = x - ox;
         const py = y - oy;
@@ -90,25 +102,27 @@ export class RenderViewRoot {
 
         if (doSublayers) {
             for (const sublayer of layer.sublayers) {
-                this.#getNodesAtPointInner(x, y, ox + pos[0], oy + pos[1], sublayer, targets);
+                if (sublayer instanceof Layer) {
+                    this.#getNodesAtPointInner(x, y, ox + pos[0], oy + pos[1], sublayer, targets);
+                }
             }
         }
     };
 
-    getTargetsAtPoint = (x, y, allWindows = false) => {
+    getTargetsAtPoint = (x: number, y: number, allWindows = false): { target: View, x: number, y: number }[] => {
         let windows = this.windows;
         if (!allWindows) {
             const stackTop = this.windows[this.windows.length - 1];
             if (!stackTop) return [];
             windows = [stackTop];
         }
-        const targets = [];
+        const targets: { target: View, x: number, y: number }[] = [];
         for (const window of windows) {
             this.#getNodesAtPointInner(x, y, 0, 0, window.layer, targets);
         }
         return targets;
     };
-    getNodesAtPoint = (x, y, allWindows = false) => {
+    getNodesAtPoint = (x: number, y: number, allWindows = false): View[] => {
         return this.getTargetsAtPoint(x, y, allWindows).map(({ target }) => target);
     };
 
@@ -173,8 +187,11 @@ export class RenderViewRoot {
         this.animationLoopId = NaN;
     }
 
+
+    errorsPrinted = 0;
+
     /// Animation loop.
-    loop = id => {
+    loop = (id: number) => {
         if (id !== this.animationLoopId) return;
         if (this.animationLoop) requestAnimationFrame(() => this.loop(id));
 
@@ -188,7 +205,11 @@ export class RenderViewRoot {
             try {
                 item.layoutIfNeeded();
             } catch (err) {
-                console.error(err);
+                if (this.errorsPrinted++ === 255) {
+                    console.error('too many errors; not logging errors anymore');
+                } else if (this.errorsPrinted < 255) {
+                    console.error(err);
+                }
             }
         }
         this._currentLayoutSet = null;

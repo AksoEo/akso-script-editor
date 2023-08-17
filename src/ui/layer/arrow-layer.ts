@@ -1,14 +1,15 @@
 import { USE_WAAPI, BaseLayer, svgNS, LayerProperty, getTransaction, vec2rgb } from './base';
+import { RawVec2, RawVec4, Vec1, Vec2, Vec4 } from '../../spring';
 
 /// Renders an arrow from start -> control1 -> control2 -> end (cubic-bezier).
 export class ArrowLayer extends BaseLayer {
-    #start = new LayerProperty([0, 0]);
-    #control1 = new LayerProperty([0, 0]);
-    #control2 = new LayerProperty([0, 0]);
-    #end = new LayerProperty([0, 0]);
-    #stroke = new LayerProperty([0, 0, 0, 1]);
-    #strokeWidth = new LayerProperty([1]);
-    #arrowSize = new LayerProperty([0]);
+    #start = new LayerProperty(new Vec2(0, 0));
+    #control1 = new LayerProperty(new Vec2(0, 0));
+    #control2 = new LayerProperty(new Vec2(0, 0));
+    #end = new LayerProperty(new Vec2(0, 0));
+    #stroke = new LayerProperty(new Vec4(0, 0, 0, 1));
+    #strokeWidth = new LayerProperty(new Vec1(1));
+    #arrowSize = new LayerProperty(new Vec1(0));
     node: SVGPathElement;
 
     constructor () {
@@ -18,9 +19,10 @@ export class ArrowLayer extends BaseLayer {
 
         const waPropCommit = (node, prop, map) => (k) => {
             const kf = k.getKeyframes().map(map);
-            const anim = k.waAnimation = new Animation(new KeyframeEffect(node, {
+            const anim = new Animation(new KeyframeEffect(node, {
                 [prop]: kf,
             }, { duration: kf.length * 1000 / 60 }));
+            k.waAnimation = [anim];
             anim.play();
         };
 
@@ -90,46 +92,46 @@ export class ArrowLayer extends BaseLayer {
         if (needsUpdate) this.needsDisplay = true;
     }
 
-    get start () {
+    get start (): Vec2 {
         return this.#start.getStatic();
     }
-    set start (value) {
-        if (this.#start.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set start (value: Vec2 | RawVec2) {
+        if (this.#start.setStatic(Vec2.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get control1 () {
+    get control1 (): Vec2 {
         return this.#control1.getStatic();
     }
-    set control1 (value) {
-        if (this.#control1.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set control1 (value: Vec2 | RawVec2) {
+        if (this.#control1.setStatic(Vec2.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get control2 () {
+    get control2 (): Vec2 {
         return this.#control2.getStatic();
     }
-    set control2 (value) {
-        if (this.#control2.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set control2 (value: Vec2 | RawVec2) {
+        if (this.#control2.setStatic(Vec2.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get end () {
+    get end (): Vec2 {
         return this.#end.getStatic();
     }
-    set end (value) {
-        if (this.#end.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set end (value: Vec2 | RawVec2) {
+        if (this.#end.setStatic(Vec2.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get stroke () {
+    get stroke (): Vec4 {
         return this.#stroke.getStatic();
     }
-    set stroke (value) {
-        if (this.#stroke.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set stroke (value: Vec4 | RawVec4) {
+        if (this.#stroke.setStatic(Vec4.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get strokeWidth () {
-        return this.#strokeWidth.getDynamic()[0];
+    get strokeWidth (): number {
+        return this.#strokeWidth.getDynamic().x;
     }
-    set strokeWidth (value) {
-        if (this.#strokeWidth.setStatic([value], getTransaction())) this.needsDisplay = true;
+    set strokeWidth (value: number) {
+        if (this.#strokeWidth.setStatic(new Vec1(value), getTransaction())) this.needsDisplay = true;
     }
-    get arrowSize () {
-        return this.#arrowSize.getDynamic()[0];
+    get arrowSize (): number {
+        return this.#arrowSize.getDynamic().x;
     }
-    set arrowSize (value) {
-        if (this.#arrowSize.setStatic([value], getTransaction())) this.needsDisplay = true;
+    set arrowSize (value: number) {
+        if (this.#arrowSize.setStatic(new Vec1(value), getTransaction())) this.needsDisplay = true;
     }
 }

@@ -2,6 +2,9 @@ import { VMFun } from '@tejo/akso-script';
 import { View, Layer, PathLayer, Transaction } from './ui';
 import { ExprView } from './expr-view';
 import config from './config';
+import { Vec2 } from "./spring";
+import { Expr } from './model';
+import { ViewContext } from './ui/context';
 
 // TODO: add loading indicator
 
@@ -12,9 +15,14 @@ import config from './config';
 /// - error: if true, will show an error icon instead
 /// - loading: if true, will show a loading indicator instead
 export class ValueView extends View {
-    constructor () {
+    valueView: ExprView;
+    errorView: ErrorView;
+
+    wantsChildLayout = true;
+
+    constructor() {
         super();
-        this.valueView = new ExprView({ type: 'u' });
+        this.valueView = new ExprView({ type: 'u', ctx: null, parent: null });
         this.valueView.noInteraction = true;
         this.valueView.decorationOnly = true;
         this.addSubview(this.valueView);
@@ -24,21 +32,25 @@ export class ValueView extends View {
         this.layer.opacity = 0;
     }
 
-    #value = undefined;
-    get value () {
+    #value: Expr.AnyRuntime | null = null;
+    #valueDidChange = false;
+    get value() {
         return this.#value;
     }
-    set value (v) {
+
+    set value(v) {
         if (v === this.#value) return;
         this.#value = v;
+        this.#valueDidChange = true;
         this.needsLayout = true;
     }
 
     #error = false;
-    get error () {
+    get error() {
         return this.#error;
     }
-    set error (error) {
+
+    set error(error) {
         if (this.#error === error) return;
         this.#error = error;
         this.updateErrorVisible();
@@ -46,12 +58,13 @@ export class ValueView extends View {
     }
 
     #valueIsError = false;
-    updateErrorVisible () {
+
+    updateErrorVisible() {
         this.#setErrorVisible(this.error || this.#valueIsError);
     }
 
     #errorVisible = null;
-    #setErrorVisible = (visible) => {
+    #setErrorVisible = (visible: boolean) => {
         if (this.#errorVisible === visible) return;
         this.#errorVisible = visible;
         if (visible) {
@@ -63,41 +76,74 @@ export class ValueView extends View {
         }
     };
 
-    layout () {
-        super.layout();
+    updateValue() {
+        if (!this.#valueDidChange) return;
+        this.#valueDidChange = false;
         const value = this.value;
 
         let isError = false;
-        let e;
-        if (value === null) e = { type: 'u' };
-        else if (typeof value === 'boolean') e = { type: 'b', value };
-        else if (typeof value === 'number') e = { type: 'n', value };
-        else if (typeof value === 'string') e = { type: 's', value };
-        else if (Array.isArray(value)) e = { type: 'm', value };
-        else if (value instanceof VMFun) e = { type: 'f', params: value.params, body: [] };
-        // TODO: these
-        else if (value instanceof Date) e = { type: 'timestamp', value };
+        let e: Expr.AnyRuntime;
+        if (value === null) e = { type: 'u', ctx: null, parent: null };
+        else if (typeof value === 'boolean') e = { type: 'b', value, ctx: null, parent: null };
+        else if (typeof value === 'number') e = { type: 'n', value, ctx: null, parent: null };
+        else if (typeof value === 'string') e = { type: 's', value, ctx: null, parent: null };
+        else if (Array.isArray(value)) e = { type: 'm', value, ctx: null, parent: null };
+        else if (value instanceof VMFun) {
+            const fun = value as VMFun;
+            e = {
+                type: 'f',
+                params: fun.params,
+                body: { type: 'd', defs: new Set(), floatingExpr: new Set(), ctx: null, parent: null },
+                ctx: null,
+                parent: null,
+            };
+        }
+        else if (value instanceof Date) e = { type: 'timestamp', value, ctx: null, parent: null };
         else if (value === undefined) {
             // probably an error
-            e = { type: 'u' };
+            e = { type: 'u', ctx: null, parent: null };
             isError = true;
-        } else e = { type: 's', value: `error: unknown value type ${typeof value}` };
+        } else e = { type: 's', value: `error: unknown value type ${typeof value}`, ctx: null, parent: null };
 
         this.valueView.expr = e;
-        this.valueView.layout();
-
-        this.errorView.layout();
+        this.valueView.needsLayout = true;
 
         this.#valueIsError = isError;
         this.updateErrorVisible();
 
+    }
+
+    getIntrinsicSize(): Vec2 {
+        this.updateValue();
+
+        if (this.#errorVisible) {
+            return this.errorView.getIntrinsicSize();
+        } else {
+            return this.valueView.getIntrinsicSize();
+        }
+    }
+
+    layout() {
+        this.needsLayout = false;
+        this.updateValue();
+
         this.layer.opacity = 1;
-        this.layer.size = this.#errorVisible ? this.errorView.size : this.valueView.size;
+        if (this.#errorVisible) {
+            this.errorView.size = this.size;
+            return this.errorView.layout();
+        } else {
+            this.valueView.size = this.size;
+            return this.valueView.layout();
+        }
     }
 }
 
 class ErrorView extends View {
-    constructor () {
+    iconContainer: Layer;
+    exclamDot: Layer;
+    exclamTop: Layer;
+
+    constructor() {
         super();
 
         this.layer.background = config.primitives.error;
@@ -128,7 +174,7 @@ class ErrorView extends View {
         this.needsLayout = true;
     }
 
-    didAttach (ctx) {
+    didAttach(ctx: ViewContext) {
         super.didAttach(ctx);
         {
             const t = new Transaction(0, 0);
@@ -148,11 +194,16 @@ class ErrorView extends View {
         }
     }
 
-    layout () {
-        this.layer.size = [
+    getIntrinsicSize() {
+        return new Vec2(
             config.icons.size + 2 * config.primitives.paddingX,
             config.icons.size + 2 * config.primitives.paddingYS,
-        ];
+        );
+    }
+
+    layout () {
+        this.needsLayout = false;
         this.iconContainer.position = [config.primitives.paddingX, config.primitives.paddingYS];
+        return this.layer.size;
     }
 }

@@ -1,12 +1,13 @@
 import { USE_WAAPI, BaseLayer, svgNS, LayerProperty, getTransaction, vec2rgb } from './base';
+import { RawVec2, RawVec4, Vec1, Vec2, Vec4 } from '../../spring';
 
 /// Renders an arbitrary SVG path. The path is not animatable.
 export class PathLayer extends BaseLayer {
     #path = '';
-    #position = new LayerProperty([0, 0]);
-    #fill = new LayerProperty([0, 0, 0, 1]);
-    #stroke = new LayerProperty([0, 0, 0, 0]);
-    #strokeWidth = new LayerProperty([0]);
+    #position = new LayerProperty(new Vec2(0, 0));
+    #fill = new LayerProperty(new Vec4(0, 0, 0, 1));
+    #stroke = new LayerProperty(new Vec4(0, 0, 0, 0));
+    #strokeWidth = new LayerProperty(new Vec1(0));
 
     node: SVGPathElement;
 
@@ -17,9 +18,10 @@ export class PathLayer extends BaseLayer {
 
         const waPropCommit = (node, prop, map) => (k) => {
             const kf = k.getKeyframes().map(map);
-            const anim = k.waAnimation = new Animation(new KeyframeEffect(node, {
+            const anim = new Animation(new KeyframeEffect(node, {
                 [prop]: kf,
             }, { duration: kf.length * 1000 / 60 }));
+            k.waAnimation = [anim];
             anim.play();
         };
 
@@ -59,28 +61,28 @@ export class PathLayer extends BaseLayer {
         this.#path = value;
         this.needsDisplay = true;
     }
-    get position () {
+    get position (): Vec2 {
         return this.#position.getStatic();
     }
-    set position (value) {
-        if (this.#position.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set position (value: Vec2 | RawVec2) {
+        if (this.#position.setStatic(Vec2.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get fill () {
+    get fill (): Vec4 {
         return this.#fill.getStatic();
     }
-    set fill (value) {
-        if (this.#fill.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set fill (value: Vec4 | RawVec4) {
+        if (this.#fill.setStatic(Vec4.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get stroke () {
+    get stroke (): Vec4 {
         return this.#stroke.getStatic();
     }
-    set stroke (value) {
-        if (this.#stroke.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set stroke (value: Vec4 | RawVec4) {
+        if (this.#stroke.setStatic(Vec4.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get strokeWidth () {
-        return this.#strokeWidth.getDynamic()[0];
+    get strokeWidth (): number {
+        return this.#strokeWidth.getDynamic().x;
     }
-    set strokeWidth (value) {
-        if (this.#strokeWidth.setStatic([value], getTransaction())) this.needsDisplay = true;
+    set strokeWidth (value: number) {
+        if (this.#strokeWidth.setStatic(new Vec1(value), getTransaction())) this.needsDisplay = true;
     }
 }

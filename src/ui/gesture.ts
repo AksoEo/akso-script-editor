@@ -18,7 +18,7 @@ export abstract class Gesture {
     ///
     /// - type: Gesture.Types
     /// - pointerType: nullable Gesture.PointerType
-    abstract getHandlerForType (type: Gesture.Type, pointerType: Gesture.PointerType);
+    abstract getHandlerForType (type: Gesture.Type, pointerType: Gesture.PointerType): GestureHandler;
 
     listeners = {};
     on (event, handler) {

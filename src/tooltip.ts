@@ -1,5 +1,6 @@
 import { View, PortalView, Layer, ArrowLayer, Transaction } from './ui';
 import config from './config';
+import { Vec2 } from './spring';
 
 /// Renders a tooltip with an arrow.
 ///
@@ -8,7 +9,14 @@ import config from './config';
 /// - contents: View
 export class Tooltip extends View {
     #visible = false;
-    #contents = null;
+    #contents: View | null = null;
+
+    portal: PortalView;
+    innerView: View;
+    bgLayer: Layer;
+    arrowLayer: ArrowLayer;
+
+    wantsChildLayout = true;
 
     constructor () {
         super();
@@ -16,6 +24,7 @@ export class Tooltip extends View {
         this.portal = new PortalView();
         this.innerView = new View();
         this.innerView.decorationOnly = true;
+        this.innerView.wantsChildLayout = true;
         this.portal.contents = this.innerView;
 
         this.bgLayer = new Layer();
@@ -32,9 +41,7 @@ export class Tooltip extends View {
         this.innerView.layer.opacity = 0;
     }
 
-    get decorationOnly () {
-        return true;
-    }
+    decorationOnly = true;
 
     get visible () {
         return this.#visible;
@@ -83,6 +90,7 @@ export class Tooltip extends View {
         if (this.#contents) this.innerView.removeSubview(this.#contents);
         this.#contents = view;
         if (this.#contents) this.innerView.addSubview(this.#contents);
+        this.#contents.needsLayout = true;
         this.needsLayout = true;
     }
 
@@ -90,6 +98,8 @@ export class Tooltip extends View {
     lastTime = 0;
 
     layout () {
+        this.needsLayout = false;
+
         const time = this.time;
         const deltaTime = (Date.now() - this.lastTime) / 1000;
         this.lastTime = Date.now();
@@ -100,11 +110,13 @@ export class Tooltip extends View {
             return;
         }
 
-        this.innerView.layoutIfNeeded();
-        if (this.contents) this.contents.layoutIfNeeded();
+        if (this.contents?.needsLayout) {
+            this.innerView.size = this.contents.size = this.contents.getIntrinsicSize();
+            this.contents.layout();
+        }
 
         const anchor = this.absolutePosition;
-        anchor[0] += this.size[0] / 2;
+        anchor.x += this.size.x / 2;
 
         {
             const t = new Transaction(0, 0);
@@ -114,8 +126,8 @@ export class Tooltip extends View {
 
         if (this.contents) {
             this.bgLayer.size = [
-                this.contents.size[0] + 12,
-                this.contents.size[1] + 12,
+                this.contents.size.x + 12,
+                this.contents.size.y + 12,
             ];
         } else {
             this.bgLayer.size = [0, 0];
@@ -128,39 +140,39 @@ export class Tooltip extends View {
         const offsetY = this.#visible ? 12 + 2 * Math.sin(time * 4) : 0;
         const maxOffsetY = this.#visible ? 14 : 0;
 
-        let contentsSize = [0, 0];
-        if (this.contents) contentsSize = this.contents.size.slice();
+        let contentsSize = Vec2.zero();
+        if (this.contents) contentsSize = this.contents.size.clone();
 
         // center position
-        const popoutPos = [0, -offsetY - contentsSize[1] / 2];
-        const maxPopoutPos = [0, -maxOffsetY - contentsSize[1] / 2];
+        const popoutPos = new Vec2(0, -offsetY - contentsSize[1] / 2);
+        const maxPopoutPos = new Vec2(0, -maxOffsetY - contentsSize[1] / 2);
 
-        if (anchor[0] + maxPopoutPos[0] - this.bgLayer.size[0] / 2 < 16) {
+        if (anchor.x + maxPopoutPos.x - this.bgLayer.size.x / 2 < 16) {
             // too close to the left edge
-            popoutPos[0] = 16 + this.bgLayer.size[0] / 2 - anchor[0];
+            popoutPos.x = 16 + this.bgLayer.size[0] / 2 - anchor.x;
         }
-        const almostRightEdge = this.ctx.window.size[0] - 16;
-        if (anchor[0] + maxPopoutPos[0] + this.bgLayer.size[0] / 2 > almostRightEdge) {
+        const almostRightEdge = this.ctx.window.size.x - 16;
+        if (anchor.x + maxPopoutPos.x + this.bgLayer.size.x / 2 > almostRightEdge) {
             // too close to the right edge
-            popoutPos[0] = (almostRightEdge - this.bgLayer.size[0] / 2) - anchor[0];
+            popoutPos.x = (almostRightEdge - this.bgLayer.size.x / 2) - anchor.x;
         }
-        if (anchor[1] + maxPopoutPos[1] - this.bgLayer.size[1] / 2 < 16) {
-            anchor[1] += this.size[1];
+        if (anchor.y + maxPopoutPos.y - this.bgLayer.size.y / 2 < 16) {
+            anchor.y += this.size.y;
             // too close to the top edge
-            popoutPos[1] = offsetY + contentsSize[1] / 2;
+            popoutPos.y = offsetY + contentsSize.y / 2;
         }
 
         if (!wasVisible) t.commit();
 
         if (this.contents) {
             this.contents.position = [
-                popoutPos[0] - this.contents.size[0] / 2,
-                popoutPos[1] - this.contents.size[1] / 2,
+                popoutPos.x - this.contents.size.x / 2,
+                popoutPos.y - this.contents.size.y / 2,
             ];
         }
         this.bgLayer.position = [
-            popoutPos[0] - this.bgLayer.size[0] / 2,
-            popoutPos[1] - this.bgLayer.size[1] / 2,
+            popoutPos.x - this.bgLayer.size.x / 2,
+            popoutPos.y - this.bgLayer.size.y / 2,
         ];
 
         this.arrowLayer.start = popoutPos;
@@ -175,5 +187,7 @@ export class Tooltip extends View {
         } else {
             this.time = 0;
         }
+
+        return this.size;
     }
 }

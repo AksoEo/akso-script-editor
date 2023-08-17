@@ -1,29 +1,42 @@
 import { View } from './view';
+import { Vec2 } from '../spring';
 
 export class Window extends View {
     wantsRootSize = true;
+    wantsChildLayout = true;
 
     /// A list of portals.
     portals: View[] = [];
 
-    layout () {
-        super.layout();
-        for (const s of this.subviews) {
-            s.size = this.size;
-            s.layout();
-        }
+    constructor() {
+        super();
     }
 
-    addPortal (view: View) {
+    addPortal (view: PortalView) {
         this.portals.push(view);
         this.addSubview(view);
     }
-    removePortal (view: View) {
+    removePortal (view: PortalView) {
         const index = this.portals.indexOf(view);
         if (index !== -1) {
             this.portals.splice(index, 1);
             this.removeSubview(view);
         }
+    }
+
+    getIntrinsicSize(): Vec2 {
+        if (!this.subviews.length) return Vec2.zero();
+        return this.subviews[0].getIntrinsicSize();
+    }
+
+    layout(): Vec2 {
+        this.needsLayout = false;
+        for (const subview of this.subviews) {
+            if (this.portals.includes(subview)) continue;
+            subview.size = this.size;
+            subview.layout();
+        }
+        return this.size;
     }
 
     getSubCtx () {

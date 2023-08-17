@@ -5,6 +5,12 @@ window.parse = parse;
 window.write = write;
 
 const editor = new Editor();
+
+setTimeout(() => {
+    editor.onCancel = () => {};
+    editor.onSave = () => {};
+}, 500);
+
 editor.load({
     mat2d: {
         t: 'm',

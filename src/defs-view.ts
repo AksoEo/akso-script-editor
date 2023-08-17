@@ -1,7 +1,5 @@
-import dagre from 'dagre';
 import { View, Layer, TextLayer, PathLayer, ArrowLayer, Transaction, Gesture } from './ui';
 import { viewPool, getProtoView } from './proto-pool';
-import { Scrollbar } from './scrollbar';
 import config from './config';
 import { ExprSlot, ExprView } from './expr-view';
 import { ValueView } from './value-view';
@@ -14,19 +12,19 @@ import {
     Expr,
     remove as removeNode,
 } from './model';
-import { DragController } from './drag-controller';
+import { DragController, IExprDragController } from './drag-controller';
 import { HelpTagged } from './help/help-tag';
-
-type Arrows = Map<Def, Map<Expr.Any, ArrowLayer>>;
+import { Vec2 } from './spring';
+import { ScrollView } from './scroll-view';
+import { FlexMainAlignOffset } from './ui/layout';
 
 /// Renders a set of definitions.
 export class DefsView extends View {
-    scroll = [0, 0];
+    scrollView = new ScrollView();
+    innerDefs: InnerDefsView = new InnerDefsView(this);
     dragController = new DragController(this);
     defs: Defs;
     needsValueUpdate: boolean;
-    scrollAnchor: DefsAnchorView;
-    scrollbar: Scrollbar;
     trash: Trash;
     addDefView: AddDefView;
 
@@ -38,12 +36,9 @@ export class DefsView extends View {
         super();
 
         this.layer.background = config.defs.background;
+        this.layoutProps.flexGrow = 1;
 
-        this.scrollAnchor = new DefsAnchorView();
         this.defs = defs;
-
-        this.scrollbar = new Scrollbar();
-        this.scrollbar.onScroll = this.onScrollbarScrollY;
 
         this.trash = new Trash();
         this.trash.dragController = this.dragController;
@@ -52,7 +47,12 @@ export class DefsView extends View {
 
         this.needsValueUpdate = true;
 
-        Gesture.onScroll(this, this.onScroll);
+        this.scrollView.scrollX = true;
+        this.scrollView.stretchX = true;
+
+        this.addSubview(this.scrollView);
+        this.addSubview(this.trash);
+        this.scrollView.contentView.addSubview(this.innerDefs);
     }
 
     setRawExprMode (options) {
@@ -60,14 +60,12 @@ export class DefsView extends View {
         this.layer.background = [0, 0, 0, 0.2];
         this.addDefView = null;
         this.rawExprView = new StandaloneExprView(this.defs.ctx, this.dragController);
-        this.scrollAnchor.addSubview(this.rawExprView);
+        this.innerDefs.addSubview(this.rawExprView);
 
         if (options.onClose) Gesture.onTap(this, options.onClose);
         if (options.location) {
             this.rawExprScreenSpaceLocation = options.location;
         }
-
-        this.flushSubviews();
     }
 
     updateValues () {
@@ -77,9 +75,6 @@ export class DefsView extends View {
             defView.updateValue();
         }
     }
-
-    /// List of arrows by source
-    #arrows = new Map();
 
     addDef = () => {
         const newDef: Def = {
@@ -93,6 +88,8 @@ export class DefsView extends View {
         const newDefView = getProtoView(newDef, DefView);
         newDefView.position = this.addDefView.position;
         newDefView.size = this.addDefView.size;
+        newDefView.layout();
+        newDefView.size.y = 0;
 
         const t = new Transaction(1, 0.3);
 
@@ -100,31 +97,6 @@ export class DefsView extends View {
         this.defs.ctx.notifyMutation(this.defs);
         t.commitAfterLayout(this.ctx);
     };
-
-    onScroll = ({ dx, dy }) => {
-        this.scroll[0] += dx;
-        this.scroll[1] += dy;
-        this.needsLayout = true;
-    };
-
-    onScrollbarScrollY = (dy) => {
-        this.scroll[1] += dy;
-        this.needsLayout = true;
-    };
-
-    get offset () {
-        const pos = this.layer.absolutePosition;
-        return [-pos[0] + this.scroll[0], -pos[1] + this.scroll[1]];
-    }
-
-    #useGraphView = false;
-    get useGraphView () {
-        return this.#useGraphView;
-    }
-    set useGraphView (value) {
-        this.#useGraphView = value;
-        this.needsLayout = true;
-    }
 
     #showTrash = false;
     get showTrash () {
@@ -139,8 +111,15 @@ export class DefsView extends View {
     _wasLeftTrash = false;
     leftTrashWidth = 0;
 
-    layout () {
-        super.layout();
+    getIntrinsicSize(): Vec2 {
+        this.innerDefs.defs = this.defs;
+        this.innerDefs.flushSubviews();
+
+        return this.scrollView.getIntrinsicSize();
+    }
+
+    layout(): Vec2 {
+        this.needsLayout = false;
 
         if (this.needsValueUpdate) this.updateValues();
 
@@ -173,223 +152,62 @@ export class DefsView extends View {
         this.trash.layout();
         t.commit();
 
-        this.layer.clipContents = this.useGraphView;
-
-        // perform layout on all defs so we have their sizes
         for (const item of this.defs.defs) {
             const itemView = getProtoView(item, DefView);
-            itemView.usingGraphView = this.useGraphView;
-            itemView.parentWidth = this.size[0];
             itemView.dragController = this.dragController;
-            itemView.layout();
         }
+
+        this.innerDefs.defs = this.defs;
+        this.innerDefs.addDefView = this.addDefView;
+        this.innerDefs.flushSubviews();
 
         if (this.isInRawExprMode) {
             this.rawExprView.layoutIfNeeded();
             if (this.rawExprScreenSpaceLocation) {
                 const ssl = this.rawExprScreenSpaceLocation;
                 const ownLocation = this.layer.absolutePosition;
-                const pos = [ssl[0] - ownLocation[0], ssl[1] - ownLocation[1]];
+                const pos = new Vec2(ssl[0] - ownLocation[0], ssl[1] - ownLocation[1]);
 
-                pos[0] = Math.max(0, pos[0]);
-                pos[1] = Math.max(0, pos[1]);
-                pos[0] = Math.min(pos[0], this.size[0] - this.rawExprView.size[0]);
-                pos[1] = Math.min(pos[1], this.size[1] - this.rawExprView.size[1]);
+                pos.x = Math.max(0, pos.x);
+                pos.y = Math.max(0, pos.y);
+                pos.x = Math.min(pos.x, this.size.x - this.rawExprView.size.x);
+                pos.y = Math.min(pos.y, this.size.y - this.rawExprView.size.y);
 
-                this.scrollAnchor.position = pos;
-            }
-        } else if (this.useGraphView) {
-            this.scrollAnchor.position = [-this.scroll[0], -this.scroll[1]];
-            this.performGraphLayout();
-
-            const offset = this.offset;
-
-            // calculate arrows
-            for (const item of this.defs.defs) {
-                const itemView = getProtoView(item, DefView);
-                if (!this.#arrows.has(item)) this.#arrows.set(item, new Map());
-                const arrows = this.#arrows.get(item);
-                const refSources = new Set();
-                for (const ref of item.referencedBy) {
-                    refSources.add(ref.source);
-                    const view = viewPool.get(ref.source);
-                    if (!view) continue;
-                    const absPos = [
-                        view.absolutePosition[0] + view.size[0] / 2 + offset[0],
-                        view.absolutePosition[1] + offset[1],
-                    ];
-
-                    let t;
-                    if (!arrows.has(ref.source)) {
-                        arrows.set(ref.source, new ArrowLayer());
-                        t = new Transaction(1, 0);
-                    }
-                    const arrow = arrows.get(ref.source);
-
-                    arrow.stroke = [0, 0, 0, 0.5];
-
-                    arrow.strokeWidth = 4;
-                    arrow.start = [
-                        itemView.position[0] + itemView.size[0] / 2,
-                        itemView.position[1] + itemView.size[1],
-                    ];
-                    arrow.end = absPos;
-                    const deltaY = arrow.end[1] - arrow.start[1];
-                    const controlDY = deltaY < 0
-                        ? 35 - deltaY / 3
-                        : 35 + deltaY / 10;
-                    arrow.control1 = [arrow.start[0], arrow.start[1] + controlDY];
-                    arrow.control2 = [arrow.end[0], arrow.end[1] - controlDY];
-                    if (t) t.commit();
-                }
-
-                for (const k of arrows.keys()) {
-                    if (!refSources.has(k)) {
-                        arrows.delete(k);
-                    }
-                }
-            }
-
-            for (const k of this.#arrows.keys()) {
-                if (!this.defs.defs.has(k)) {
-                    this.#arrows.delete(k);
-                }
+                this.innerDefs.position = pos;
             }
         } else {
-            const { maxWidth, y } = this.performLinearLayout();
-            this.#arrows.clear();
-
-            const minX = 0;
-            const maxX = Math.max(0, maxWidth - this.size[0]);
-            const minY = 0;
-            const maxY = Math.max(0, y - this.size[1]);
-            this.scroll[0] = Math.max(minX, Math.min(this.scroll[0], maxX));
-            this.scroll[1] = Math.max(minY, Math.min(this.scroll[1], maxY));
-
-            this.scrollbar.edgeX = this.size[0];
-            this.scrollbar.height = this.size[1];
-            this.scrollbar.scroll = this.scroll[1];
-            this.scrollbar.scrollMax = maxY;
-            this.scrollbar.layout();
-
-            this.scrollAnchor.position = [-this.scroll[0], -this.scroll[1]];
+            this.scrollView.size = this.size;
+            this.scrollView.layout();
         }
 
-        this.scrollAnchor.defs = this.defs;
-        this.scrollAnchor.addDefView = !this.useGraphView ? this.addDefView : null;
-        this.scrollAnchor.arrows = this.#arrows;
-        this.scrollAnchor.flushSubviews();
-        this.scrollAnchor.layout();
+        return this.size;
     }
 
-    tentativeDef = null;
-    tentativeInsertPos = null;
+    tentativeDef: [number, number] | null = null;
+    tentativeInsertPos: number | null = null;
 
-    performLinearLayout () {
-        let maxWidth = 0;
-        let y = 0;
-        let i = 0;
-        this.tentativeInsertPos = null;
-        for (const def of this.defs.defs) {
-            const defView = getProtoView(def, DefView);
-            if (defView._isBeingDragged) continue;
-
-            if (this.tentativeDef) {
-                const [ty, theight] = this.tentativeDef;
-                const py = ty + theight / 2;
-                if (y <= py && y + defView.size[1] + 1 >= py) {
-                    y += theight;
-                    this.tentativeInsertPos = i;
-                }
-            }
-
-            defView.position = [0, y];
-            y += defView.size[1] + 1;
-            maxWidth = Math.max(maxWidth, defView.size[0]);
-            i++;
-        }
-
-        if (this.addDefView) {
-            this.addDefView.parentWidth = this.size[0];
-            this.addDefView.layout();
-            this.addDefView.position = [0, y];
-            y += this.addDefView.size[1];
-        }
-        y += 24;
-
-        if (this.tentativeDef && this.tentativeInsertPos === null) {
-            // did not find an insertion point; probably because it’s out of bounds
-            this.tentativeInsertPos = this.defs.defs.size;
-        }
-        return { maxWidth, y };
-    }
-
-    performGraphLayout () {
-        this.tentativeInsertPos = null;
-
-        const id2def = new Map();
-        const def2id = new Map();
-        let idCounter = 0;
-        for (const def of this.defs.defs) {
-            const id = `cats${idCounter++}`;
-            id2def.set(id, def);
-            def2id.set(def, id);
-        }
-
-        const g = new dagre.graphlib.Graph();
-        g.setGraph({
-            rankdir: 'TB',
-            marginx: 8,
-            marginy: 8,
-            nodesep: 16,
-        });
-        g.setDefaultEdgeLabel(() => ({}));
-
-        for (const [id, def] of id2def) {
-            const defView = getProtoView(def, DefView);
-
-            g.setNode(id, {
-                id,
-                width: defView.size[0],
-                height: defView.size[1],
-            });
-
-            for (const ref of def.references) {
-                if (!ref.target) continue;
-                const targetId = def2id.get(ref.target);
-                if (!targetId) continue; // probably an stdlib item
-                g.setEdge(targetId, id);
-            }
-        }
-
-        dagre.layout(g);
-
-        for (const id of g.nodes()) {
-            const node = g.node(id);
-            const def = id2def.get(id);
-
-            const defView = getProtoView(def, DefView);
-            if (defView._isBeingDragged) continue;
-            defView.position = [node.x - defView.size[0] / 2, node.y - defView.size[1] / 2];
-        }
-    }
-
-    addFloatingExpr (expr) {
+    addFloatingExpr (expr: Expr.Any) {
         this.defs.floatingExpr.add(expr);
         this.defs.ctx.notifyMutation(this.defs);
-        this.addSubview(getProtoView(expr, ExprView));
+
+        const view = getProtoView(expr, ExprView);
+
+        this.addSubview(view);
         this.flushSubviews();
+
+        view.size = view.getIntrinsicSize();
+        view.layout();
     }
-    removeFloatingExpr (expr) {
+    removeFloatingExpr (expr: Expr.Any) {
         this.defs.floatingExpr.delete(expr);
         this.removeSubview(getProtoView(expr, ExprView));
         this.defs.ctx.notifyMutation(this.defs);
     }
 
-    putTentative (y, height) {
-        if (this.useGraphView) return;
+    putTentative (y: number, height: number) {
         this.tentativeDef = [y, height];
         this.needsLayout = true;
+        this.innerDefs.needsLayout = true;
     }
     endTentative (def?: Def) {
         if (def && this.tentativeInsertPos !== null) {
@@ -402,42 +220,107 @@ export class DefsView extends View {
         }
         this.tentativeDef = null;
         this.needsLayout = true;
-    }
-
-    *iterSubviews () {
-        this.scrollAnchor.flushSubviews();
-        yield this.scrollAnchor;
-        yield this.trash;
-        if (!this.useGraphView) yield this.scrollbar;
+        this.innerDefs.needsLayout = true;
     }
 }
 
-class DefsAnchorView extends View {
+class InnerDefsView extends View {
     defs: Defs = { defs: [] } as any; // close enough for our purposes
     floatingExpr = [];
-    arrows: Arrows = new Map();
-    arrowContainer = new DefsArrows();
     addDefView: AddDefView | null = null;
-    layout () {
-        super.layout();
-        this.arrowContainer.arrows = this.arrows;
-        this.arrowContainer.flushSubviews();
+    owner: DefsView;
+
+    constructor(owner: DefsView) {
+        super();
+        this.owner = owner;
+        this.layoutProps.padding = new Vec2(config.defs.padding, config.defs.padding);
+        this.layoutProps.gap = config.defs.gap;
     }
+
+    getIntrinsicSize(): Vec2 {
+        let maxWidth = 0;
+        let y = 0;
+
+        let i = 0;
+        for (const def of this.defs.defs) {
+            const index = i++;
+            const defView = getProtoView(def, DefView);
+            const defSize = defView.getIntrinsicSize();
+
+            maxWidth = Math.max(maxWidth, defSize.x);
+            if (index) y += this.layoutProps.gap;
+            y += defSize.y;
+        }
+
+        if (this.addDefView) {
+            y += this.addDefView.getIntrinsicSize().y;
+        }
+
+        y += 24;
+
+        return new Vec2(
+            maxWidth + this.layoutProps.padding.x * 2,
+            y + this.layoutProps.padding.y * 2,
+        );
+    }
+
+    layout() {
+        this.needsLayout = false;
+        const defSizes = new Map<DefView, Vec2>();
+        let maxWidth = this.size.x - this.layoutProps.padding.x * 2;
+
+        for (const def of this.defs.defs) {
+            const defView = getProtoView(def, DefView);
+            const defSize = defView.getIntrinsicSize();
+            defSizes.set(defView, defSize);
+            maxWidth = Math.max(maxWidth, defSize.x);
+        }
+
+        let y = this.layoutProps.padding.y;
+        let i = 0;
+        this.owner.tentativeInsertPos = null;
+
+        for (const def of this.defs.defs) {
+            const index = i++;
+            const defView = getProtoView(def, DefView);
+
+            if (defView._isBeingDragged) continue;
+
+            if (this.owner.tentativeDef) {
+                const [ty, theight] = this.owner.tentativeDef;
+                const py = ty + theight / 2;
+                if (y <= py && y + defSizes.get(defView)!.y + this.layoutProps.gap >= py) {
+                    y += theight + this.layoutProps.gap;
+                    this.owner.tentativeInsertPos = index;
+                }
+            }
+
+            defView.size = [maxWidth, defSizes.get(defView)!.y];
+            defView.position = [this.layoutProps.padding.x, y];
+            defView.layout();
+            y += defView.size.y + this.layoutProps.gap;
+        }
+
+        if (this.addDefView) {
+            this.addDefView.size = [maxWidth, this.addDefView.getIntrinsicSize().y];
+            this.addDefView.position = [this.layoutProps.padding.x, y];
+            this.addDefView.layout();
+        }
+
+        if (this.owner.tentativeDef && this.owner.tentativeInsertPos === null) {
+            // did not find an insertion point; probably because it’s out of bounds
+            this.owner.tentativeInsertPos = this.defs.defs.size;
+        }
+
+        return this.size;
+    }
+
     *iterSubviews () {
-        this.arrowContainer.flushSubviews();
-        yield this.arrowContainer;
         for (const item of this.defs.defs) {
             yield getProtoView(item, DefView);
         }
         if (this.addDefView) yield this.addDefView;
         for (const expr of this.floatingExpr) yield getProtoView(expr, ExprView);
-    }
-}
-
-class DefsArrows extends View {
-    arrows: Arrows = new Map();
-    *iterSublayers () {
-        for (const arrows of this.arrows.values()) for (const arrow of arrows.values()) yield arrow;
     }
 }
 
@@ -503,29 +386,37 @@ class StandaloneExprView extends View {
         this.layer.background = config.def.background;
         this.layer.cornerRadius = config.def.cornerRadius;
         this.exprSlot.position = [config.def.padding, config.def.padding];
-        this.layer.size = [
+        return new Vec2(
             this.exprSlot.size[0] + config.def.padding * 2,
             this.exprSlot.size[1] + config.def.padding * 2,
-        ];
+        );
     }
 }
 
 /// Renders a single definition.
-export class DefView extends View {
+export class DefView extends View implements IExprDragController {
     wantsChildLayout = true;
     def: Def;
     refView: ExprView;
-    eqLayer: TextLayer;
     exprSlot: ExprSlot;
     valueView: DefValueView;
     dragController: DragController | null = null;
-    parentWidth = 0;
     _isBeingDragged = false;
 
-    constructor (def) {
+    static LIST_MAIN_ALIGN: FlexMainAlignOffset = {
+        subviewIndex: 2,
+        alignToOffset: config.lhsAlignWidth,
+    };
+
+    constructor (def: Def) {
         super();
 
         this.def = def;
+
+        this.layoutProps.layout = 'flex';
+        this.layoutProps.padding = new Vec2(config.def.padding, config.def.padding);
+        this.layoutProps.gap = 8;
+        this.layoutProps.crossAlign = 'center';
 
         this.refView = new ExprView({
             ctx: def.ctx,
@@ -537,11 +428,8 @@ export class DefView extends View {
         this.refView.onDefRename = this.onRename;
         this.refView.dragController = this;
 
-        this.eqLayer = new TextLayer();
-        this.eqLayer.font = config.identFont;
-        this.eqLayer.text = '=';
-
         this.layer.background = config.def.background;
+        this.layer.cornerRadius = config.def.listCornerRadius;
 
         this.exprSlot = new ExprSlot(expr => {
             const prevExpr = this.def.expr;
@@ -564,8 +452,8 @@ export class DefView extends View {
 
         this.valueView = new DefValueView();
 
-        this.addSublayer(this.eqLayer);
         this.addSubview(this.refView);
+        this.addSubview(new DefEqualsView());
         this.addSubview(this.exprSlot);
         this.addSubview(this.valueView);
 
@@ -605,16 +493,6 @@ export class DefView extends View {
             return;
         }
         this.cachedValue = result.result;
-    }
-
-    #usingGraphView = false;
-    get usingGraphView () {
-        return this.#usingGraphView;
-    }
-    set usingGraphView (value) {
-        if (value === this.usingGraphView) return;
-        this.#usingGraphView = value;
-        this.needsLayout = true;
     }
 
     onTap = () => {
@@ -682,11 +560,11 @@ export class DefView extends View {
     // FIXME: can the drag detection stuff be removed?
     #dragStartPos = [0, 0];
     #createdDragRef = false;
-    beginExprDrag (expr, x, y) {
+    beginExprDrag (expr: Expr.Any, x: number, y: number) {
         this.#dragStartPos = [x, y];
         this.#createdDragRef = false;
     }
-    createDragRef (x, y) {
+    createDragRef (x: number, y: number) {
         const ref: Expr.Ref = { ctx: this.def.ctx, parent: null, type: 'r', name: this.def.name };
         const refView = getProtoView(ref, ExprView);
         const transaction = new Transaction(1, 0);
@@ -704,7 +582,7 @@ export class DefView extends View {
         this.dragController.beginExprDrag(ref, x, y);
         transaction.commit();
     }
-    moveExprDrag (x, y) {
+    moveExprDrag (x: number, y: number) {
         if (this.#createdDragRef) {
             this.dragController.moveExprDrag(x, y);
         } else {
@@ -726,7 +604,7 @@ export class DefView extends View {
         }
     }
 
-    onRename = name => {
+    onRename = (name: string) => {
         if (name === this.def.name) return; // nothing to do
         if (name.startsWith('@') || name.startsWith('_')) {
             // TODO: handle better
@@ -788,55 +666,50 @@ export class DefView extends View {
         new Transaction(1, 0.3).commitAfterLayout(this.ctx);
     };
 
-    layout () {
-        super.layout();
+    sync() {
         (this.refView.expr as Expr.Ref).name = this.def.name;
-        this.refView.layoutIfNeeded();
-        const nameSize = this.refView.size;
-
-        // try to align left hand side if this is the linear view
-        const nameAlignedSize = this.usingGraphView ? nameSize[0] : Math.max(nameSize[0], config.lhsAlignWidth);
-        this.layer.cornerRadius = this.usingGraphView ? config.def.cornerRadius : 0;
-
-        const eqSize = this.eqLayer.getNaturalSize();
-
         this.exprSlot.expr = this.def.expr;
         this.exprSlot.exprCtx = this.def.ctx;
         this.exprSlot.dragController = this.dragController;
-        this.exprSlot.layoutIfNeeded();
 
         this.valueView.loading = this.cachedLoading;
         this.valueView.value = this.cachedValue;
         this.valueView.error = this.cachedError;
         this.valueView.hidden = !this.cachedError && this.cachedValue === undefined;
-        this.valueView.layoutIfNeeded();
 
-        const { padding } = config.def;
+        if (this.parent instanceof InnerDefsView) {
+            this.layoutProps.mainAlign = DefView.LIST_MAIN_ALIGN;
+        } else {
+            this.layoutProps.mainAlign = 'center';
+        }
+    }
 
-        const height = padding + Math.max(nameSize[1], this.exprSlot.size[1]) + padding;
+    getIntrinsicSize(): Vec2 {
+        this.sync();
+        return super.getIntrinsicSize();
+    }
 
-        let width = padding + (nameAlignedSize - nameSize[0]);
-        this.refView.position = [width, (height - nameSize[1]) / 2];
-        width += nameSize[0];
-        width += padding;
+    layout(): Vec2 {
+        this.sync();
+        return super.layout();
+    }
+}
 
-        this.eqLayer.position = [width, height / 2];
-        width += eqSize[0];
-        width += padding;
-
-        this.exprSlot.position = [width, (height - this.exprSlot.size[1]) / 2];
-        width += this.exprSlot.size[0];
-        width += padding;
-
-        if (this.valueView.size[0]) width += padding;
-        this.valueView.position = [width, (height - this.valueView.size[1]) / 2];
-        width += this.valueView.size[0];
-        if (this.valueView.size[0]) width += padding;
-
-        this.layer.size = [
-            this.usingGraphView ? width : Math.max(width, this.parentWidth),
-            height,
-        ];
+class DefEqualsView extends View {
+    label = new TextLayer();
+    constructor() {
+        super();
+        this.label.text = '=';
+        this.label.font = config.identFont;
+        this.addSublayer(this.label);
+    }
+    getIntrinsicSize(): Vec2 {
+        return this.label.getNaturalSize();
+    }
+    layout(): Vec2 {
+        this.needsLayout = false;
+        this.label.position = [0, this.size.y / 2];
+        return this.size;
     }
 }
 
@@ -875,29 +748,37 @@ class DefValueView extends View implements HelpTagged {
         this.inner.error = v;
     }
     hidden = false;
+
+    getIntrinsicSize(): Vec2 {
+        if (this.hidden) return Vec2.zero();
+
+        const innerSize = this.inner.getIntrinsicSize();
+        return new Vec2(innerSize.x + 12, innerSize.y + 12);
+    }
+
     layout () {
         super.layout();
-        this.inner.layoutIfNeeded();
+        this.inner.size = new Vec2(this.size.x - 12, this.size.y - 12);
+        this.inner.layout();
 
-        let ownSize;
+        let ownSize = Vec2.zero();
         if (this.inner.size[0] && !this.hidden) {
             // non-zero size means it has a value
-            ownSize = [
+            ownSize = new Vec2(
                 this.inner.size[0] + 12,
                 this.inner.size[1] + 12,
-            ];
-        } else {
-            ownSize = [0, 0];
+            );
         }
 
         this.inner.position = [6, 6];
         this.layer.opacity = this.hidden ? 0 : 1;
 
-        this.layer.size = ownSize;
         this.arrowLayer.start = [0, ownSize[1] / 2];
         this.arrowLayer.control1 = this.arrowLayer.start;
         this.arrowLayer.end = [ownSize[0] ? -10 : 0, ownSize[1] / 2];
         this.arrowLayer.control2 = this.arrowLayer.end;
+
+        return ownSize;
     }
 }
 
@@ -910,6 +791,7 @@ class AddDefView extends View {
         super();
         this.onAdd = onAdd;
         this.layer.background = config.def.background;
+        this.layer.cornerRadius = config.def.listCornerRadius;
         this.label = new TextLayer();
         this.label.font = config.identFont;
         this.label.text = '+';
@@ -919,13 +801,14 @@ class AddDefView extends View {
         Gesture.onTap(this, this.onAdd);
     }
 
+    getIntrinsicSize(): Vec2 {
+        return new Vec2(this.parentWidth, 32);
+    }
+
     layout () {
-        super.layout();
-
-        const height = 32;
-
-        this.layer.size = [this.parentWidth, height];
+        this.needsLayout = false;
         this.label.position = [this.layer.size[0] / 2, this.layer.size[1] / 2];
+        return this.size;
     }
 
     *iterSublayers () {
@@ -1063,6 +946,8 @@ export class Trash extends View {
             : (this.active ? config.trash.activeBackground : config.trash.background);
 
         this.layer.opacity = !this.isLeftTrash || this.shouldShow ? 1 : 0;
+
+        return this.layer.size;
     }
 
     *iterSublayers () {

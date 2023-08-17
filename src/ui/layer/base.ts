@@ -1,11 +1,11 @@
-import { SpringSolver } from '../../spring';
+import { dim, SpringSolver, Vec2, VecAny } from '../../spring';
 
 export const svgNS = 'http://www.w3.org/2000/svg';
 
 export const USE_WAAPI = !!(document.timeline && window.Animation);
 
 /// Converts a float[4] to a css color string (rgba).
-export function vec2rgb(vec) {
+export function vec2rgb(vec: [number, number, number, number]): string {
     const r = Math.max(0, Math.min(Math.round(vec[0] * 255), 255));
     const g = Math.max(0, Math.min(Math.round(vec[1] * 255), 255));
     const b = Math.max(0, Math.min(Math.round(vec[2] * 255), 255));
@@ -15,17 +15,18 @@ export function vec2rgb(vec) {
 }
 
 /// Stack of global transactions.
-const globalTransactions = [];
+const globalTransactions: Transaction[] = [];
 
 /// Returns the topmost transaction, or null.
 export function getTransaction () {
     return globalTransactions[globalTransactions.length - 1] || null;
 }
 
-
 /// Base layer class. Handles display scheduling and such.
 export abstract class BaseLayer {
     #needsDisplay = false;
+
+    abstract node: SVGElement;
 
     /// Rendering context
     ctx = null;
@@ -52,12 +53,12 @@ export abstract class BaseLayer {
     }
 
     get position () {
-        return [0, 0];
+        return Vec2.zero();
     }
 
     get absolutePosition () {
-        const parentPos = this.parent ? this.parent.absolutePosition : [0, 0];
-        return [this.position[0] + parentPos[0], this.position[1] + parentPos[1]];
+        const parentPos = this.parent ? this.parent.absolutePosition : Vec2.zero();
+        return new Vec2(this.position.x + parentPos.x, this.position.y + parentPos.y);
     }
 
     get sublayers () {
@@ -70,11 +71,11 @@ export abstract class BaseLayer {
 const PROP_UPDATE_THRESHOLD = 1e-4;
 
 /// A layer property. Handles animation.
-export class LayerProperty {
+export class LayerProperty<T extends VecAny> {
     // WAAPI hook (property) => void. Called when an animation is committed.
     waCommitCallback = null;
-    // Either Animation or [Animation]. Will be canceled when appropriate.
-    waAnimation = null;
+    // Currently running animations. Will be canceled when appropriate.
+    waAnimation: Animation[] | null = null;
 
     // target value of this property
     target = null;
@@ -85,19 +86,17 @@ export class LayerProperty {
     hasPending = false;
     pendingValue = null;
 
-    spring: SpringSolver;
+    spring: SpringSolver<T>;
 
-    constructor (initial) {
-        this.spring = new SpringSolver(1, 1, initial.length || 1);
+    constructor (initial: T) {
+        this.spring = new SpringSolver(1, 1, dim(initial));
         this.target = initial;
     }
 
-    _needsUpdateInner (value, target, velocity) {
-        if (target.length) {
-            for (let i = 0; i < target.length; i++) {
-                if (Math.abs(target[i] - value[i]) + Math.abs(velocity[i]) > PROP_UPDATE_THRESHOLD) return true;
-            }
-        } else if (Math.abs(target - value) + Math.abs(velocity) > PROP_UPDATE_THRESHOLD) return true;
+    _needsUpdateInner (value: T, target: T, velocity: T) {
+        for (let i = 0; i < target.length; i++) {
+            if (Math.abs(target[i] - value[i]) + Math.abs(velocity[i]) > PROP_UPDATE_THRESHOLD) return true;
+        }
         return false;
     }
 
@@ -115,19 +114,8 @@ export class LayerProperty {
     }
 
     /// Sets the static value of this property with an optional transaction.
-    setStatic (target, transaction = null) {
-        let isTheSame = true;
-        if (target.length) {
-            for (let i = 0; i < target.length; i++) {
-                if (target[i] !== this.target[i]) {
-                    isTheSame = false;
-                    break;
-                }
-            }
-        } else {
-            isTheSame = target === this.target;
-        }
-        if (isTheSame) return false;
+    setStatic (target: T, transaction = null) {
+        if (target.eq(this.target)) return false;
 
         if (transaction) {
             this.hasPending = true;
@@ -143,10 +131,8 @@ export class LayerProperty {
     }
 
     cancelWAAnimation () {
-        if (Array.isArray(this.waAnimation)) {
+        if (this.waAnimation) {
             for (const a of this.waAnimation) a.cancel();
-        } else if (this.waAnimation) {
-            this.waAnimation.cancel();
         }
         this.waAnimation = null;
     }
@@ -178,7 +164,7 @@ export class LayerProperty {
     /// Returns null if there is no animation.
     getKeyframes () {
         if (this.initTime === null) return null;
-        const keyframes = [];
+        const keyframes: T[] = [];
         const tOff = this.getTime();
         let t = 0;
         while (t < 10) {
@@ -194,7 +180,7 @@ export class LayerProperty {
     }
 
     /// Commits a transaction (internal method)
-    commitTransaction (target, damping, period) {
+    commitTransaction (target: T, damping: number, period: number) {
         if (period === 0) {
             this.hasPending = false;
             this.initTime = null;
@@ -222,9 +208,14 @@ export class LayerProperty {
     }
 }
 
+interface TransactionEntry<T extends VecAny> {
+    property: LayerProperty<T>;
+    target: T;
+}
+
 /// An animation transaction.
 export class Transaction {
-    properties = [];
+    properties: TransactionEntry<any>[] = [];
     damping: number;
     period: number;
 
@@ -247,7 +238,7 @@ export class Transaction {
     }
 
     /// Internal function
-    addProperty (property, target) {
+    addProperty<T extends VecAny>(property: LayerProperty<T>, target: T) {
         this.properties.push({ property, target });
     }
 }

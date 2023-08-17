@@ -1,23 +1,30 @@
 import { VMFun } from '@tejo/akso-script';
 import { Gesture, Layer, TextLayer, Transaction, View } from './ui';
 import { ExprFactory } from './expr-factory';
-import { evalExpr, Expr, makeStdRefs } from './model';
-import { Scrollbar } from './scrollbar';
+import { Def, evalExpr, Expr, FormVar, makeStdRefs, RawExpr } from './model';
 import { initFormVarsTab } from './form-vars';
 import { DefsView } from './defs-view';
 import config from './config';
 import { HelpTagged } from './help/help-tag';
+import { Vec2 } from './spring';
+import { ScrollView } from './scroll-view';
+import { ComponentView, VNode } from './ui/component-view';
+
+export interface Tab {
+    id: string;
+    view: ScrollView;
+    itemList: ItemList;
+}
 
 /// This is the library of objects on the left-hand side.
 export class Library extends View implements HelpTagged {
     defs: DefsView;
     layer: Layer;
     sideTabs: SideTabs;
-    tabs: { [k: string]: { id: string, view: Scrollable, itemList: ItemList } };
-    onRequestLinearView: (() => void) | null = null;
+    tabs: Record<string, Tab>;
     formVarsTab: { update(): void };
 
-    constructor (defs) {
+    constructor (defs: DefsView) {
         super();
 
         this.defs = defs;
@@ -29,8 +36,9 @@ export class Library extends View implements HelpTagged {
 
         this.tabs = {};
         for (const t in config.library.items) {
-            const itemList = new ItemList();
-            const view = new Scrollable(itemList);
+            const itemList = new ItemList({ items: [] });
+            const view = new ScrollView();
+            view.contentView.addSubview(itemList);
 
             this.tabs[t] = {
                 id: t,
@@ -75,41 +83,37 @@ export class Library extends View implements HelpTagged {
         if (this.selected === item) {
             this.selected = null;
         } else {
-            if (this.defs.useGraphView) {
-                if (this.onRequestLinearView) this.onRequestLinearView();
-                else return;
-            }
             this.selected = item;
             this.pseudoSelected = this.selected;
         }
 
         this.sideTabs.selected = this.selected;
         this.sideTabs.needsLayout = true;
-        if (this.parent) this.parent.needsLayout = true;
         this.needsLayout = true;
         this.flushSubviews();
     }
 
     createTab (tab) {
         if (tab.id === 'primitives') {
-            tab.itemList.items = [
-                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'u' })),
-                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'b', value: true })),
-                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'n', value: 0 })),
-                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 's', value: '' })),
-                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'm', value: [] })),
-                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'l', items: [] })),
-                new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'w', matches: [] })),
-            ];
-            tab.itemList.needsLayout = true;
+            tab.itemList.update({
+                items: [
+                    new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'u' })),
+                    new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'b', value: true })),
+                    new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'n', value: 0 })),
+                    new ExprFactory(this, ctx => ({ ctx, parent: null, type: 's', value: '' })),
+                    new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'm', value: [] })),
+                    new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'l', items: [] })),
+                    new ExprFactory(this, ctx => ({ ctx, parent: null, type: 'w', matches: [] })),
+                ],
+            });
         } else if (tab.id === 'stdlib') {
             const stdRefs = makeStdRefs();
-            tab.itemList.items = [];
+            const items = [];
             for (const categoryName in config.stdlibCategories) {
                 const category = config.stdlibCategories[categoryName];
-                tab.itemList.items.push(new SectionHeader(config.stdlibCategoryNames[categoryName]));
+                items.push(new SectionHeader(config.stdlibCategoryNames[categoryName]));
                 for (const id of category) {
-                    tab.itemList.items.push(new ExprFactory(this, ctx => {
+                    items.push(new ExprFactory(this, ctx => {
                         const expr: Expr.Call = {
                             ctx,
                             parent: null,
@@ -128,22 +132,24 @@ export class Library extends View implements HelpTagged {
                     }));
                 }
             }
-            tab.itemList.needsLayout = true;
+            tab.itemList.update({ items });
         } else if (tab.id === 'formVars') {
-            tab.itemList.items = [];
             this.formVarsTab = initFormVarsTab(this, tab);
+            tab.view.stretchX = true;
             tab.itemList.needsLayout = true;
         }
     }
-    updateTab (tab) {
+
+    updateTab (tab: Tab) {
         if (tab.id === 'references') {
+            const items = [];
+
             if (!tab.itemList._byFormVar) tab.itemList._byFormVar = new WeakMap();
             if (!tab.itemList._byExtDef) tab.itemList._byExtDef = new WeakMap();
             if (!tab.itemList._byDef) tab.itemList._byDef = new WeakMap();
             const byFormVar = tab.itemList._byFormVar;
             const byExtDef = tab.itemList._byExtDef;
             const byDef = tab.itemList._byDef;
-            tab.itemList.items = [];
 
             for (const fvar of this.defs.defs.ctx.formVars) {
                 if (!byFormVar.has(fvar)) byFormVar.set(fvar, {});
@@ -164,7 +170,7 @@ export class Library extends View implements HelpTagged {
                     }
                 }
 
-                if (state.refExpr) tab.itemList.items.push(state.refExpr);
+                if (state.refExpr) items.push(state.refExpr);
             }
 
             for (const script of this.defs.defs.ctx.externalDefs) {
@@ -185,7 +191,7 @@ export class Library extends View implements HelpTagged {
 
                     // TODO: isCallable? arity? function calls
 
-                    if (state.refExpr) tab.itemList.items.push(state.refExpr);
+                    if (state.refExpr) items.push(state.refExpr);
                 }
             }
 
@@ -253,11 +259,11 @@ export class Library extends View implements HelpTagged {
                     }
                 } else state.callExpr = null;
 
-                if (state.refExpr) tab.itemList.items.push(state.refExpr);
-                if (state.callExpr) tab.itemList.items.push(state.callExpr);
+                if (state.refExpr) items.push(state.refExpr);
+                if (state.callExpr) items.push(state.callExpr);
             }
 
-            tab.itemList.needsLayout = true;
+            tab.itemList.update({ items });
         } else if (tab.id === 'formVars') {
             this.formVarsTab.update();
         }
@@ -266,27 +272,33 @@ export class Library extends View implements HelpTagged {
     isMinimized () {
         return this.selected === null;
     }
-    getMinimizedWidth () {
-        this.sideTabs.layoutIfNeeded();
-        return this.sideTabs.size[0];
+
+    getIntrinsicSize(): Vec2 {
+        const sideTabsSize = this.sideTabs.getIntrinsicSize();
+        const contentsWidth = this.isMinimized() ? 0 : config.sidebarWidth;
+
+        return new Vec2(sideTabsSize.x + contentsWidth, 0);
     }
 
     layout () {
-        super.layout();
-        this.sideTabs.height = this.size[1];
-        this.sideTabs.layout();
+        this.needsLayout = false;
 
-        const contentsWidth = this.size[0] - this.sideTabs.size[0];
+        this.sideTabs.height = this.size.y;
+        this.sideTabs.size = this.sideTabs.layout();
+
+        const contentsWidth = this.size.x - this.sideTabs.size.x;
 
         for (const t in this.tabs) {
             const tab = this.tabs[t];
 
             this.updateTab(tab);
 
-            tab.view.position = [this.sideTabs.size[0], 0];
-            tab.view.size = [contentsWidth, this.size[1]];
+            tab.view.position = [this.sideTabs.size.x, 0];
+            tab.view.size = [contentsWidth, this.size.y];
             tab.view.layoutIfNeeded();
         }
+
+        return this.size;
     }
 
     *iterSubviews () {
@@ -343,8 +355,20 @@ class SideTabs extends View {
 
     eventBounds = [];
 
+    getIntrinsicSize(): Vec2 {
+        let width = 0;
+        let height = 0;
+
+        for (const layer of this.tabLayers) {
+            const textSize = layer.label.getNaturalSize();
+            width = Math.max(width, 4 + textSize.y + 8);
+            height += 16 + textSize.x + 16;
+        }
+        return new Vec2(width, height);
+    }
+
     layout () {
-        super.layout();
+        this.needsLayout = false;
 
         this.eventBounds = [];
 
@@ -370,10 +394,10 @@ class SideTabs extends View {
             });
         }
 
-        this.layer.size = [width, this.height];
+        return new Vec2(width, this.height);
     }
 
-    getItemAtY = y => {
+    getItemAtY = (y: number) => {
         for (const bound of this.eventBounds) {
             if (bound.y <= y && bound.endY > y) {
                 return bound.id;
@@ -381,7 +405,7 @@ class SideTabs extends View {
         }
     };
 
-    onTapStart = ({ y }) => {
+    onTapStart = ({ y }: { y: number }) => {
         const t = new Transaction(1, 0.3);
         const item = this.getItemAtY(y);
         if (item) this.onSelect(item);
@@ -399,7 +423,7 @@ class SideTabs extends View {
 class SectionHeader extends View {
     labelLayer: TextLayer;
 
-    constructor (label) {
+    constructor (label: string) {
         super();
 
         this.labelLayer = new TextLayer();
@@ -408,109 +432,39 @@ class SectionHeader extends View {
         this.addSublayer(this.labelLayer);
         this.needsLayout = true;
     }
-    layout () {
-        const paddingTop = 8;
+
+    getIntrinsicSize(): Vec2 {
         const labelSize = this.labelLayer.getNaturalSize();
-        this.labelLayer.position = [0, paddingTop + labelSize[1] / 2];
-        this.layer.size = [labelSize[0], labelSize[1] + paddingTop];
-    }
-}
-
-class Scrollable extends View {
-    contents: View;
-    scrollbar: Scrollbar;
-
-    constructor (contents: View) {
-        super();
-        this.contents = contents;
-        this.layer.clipContents = true;
-
-        this.scrollbar = new Scrollbar();
-        this.scrollbar.onScroll = dy => this.onScroll({ dy });
-
-        Gesture.onScroll(this, this.onScroll);
-    }
-
-    scroll = 0;
-
-    didAttach (ctx) {
-        super.didAttach(ctx);
-
-        // HACK: force update scrollbar
-        setTimeout(() => {
-            this.needsLayout = true;
-        }, 100);
+        return new Vec2(labelSize[0], labelSize[1] + 8);
     }
 
     layout () {
-        super.layout();
-
-        // FIXME: some better way of doing this...
-        (this.contents as any).parentWidth = this.size[0];
-        this.contents.layoutIfNeeded();
-
-        const scrollMin = 0;
-        const scrollMax = Math.max(0, this.contents.size[1] - this.size[1]);
-
-        this.scroll = Math.max(scrollMin, Math.min(this.scroll, scrollMax));
-
-        this.scrollbar.edgeX = this.size[0];
-        this.scrollbar.height = this.size[1];
-        this.scrollbar.scrollMax = scrollMax;
-        this.scrollbar.scroll = this.scroll;
-        this.scrollbar.layout();
-
-        // FIXME: ditto
-        (this.contents as any).visibleBoundsY = [this.scroll, this.scroll + this.size[1]];
-        this.contents.position = [0, -this.scroll];
-        this.contents.flushSubviews();
-    }
-
-    onScroll = ({ dy }) => {
-        this.scroll += dy;
-        this.needsLayout = true;
-    };
-
-    *iterSubviews () {
-        yield this.contents;
-        yield this.scrollbar;
+        this.needsLayout = false;
+        const labelSize = this.labelLayer.getNaturalSize();
+        this.labelLayer.position = [0, 8 + labelSize[1] / 2];
+        return this.size;
     }
 }
 
-class ItemList extends View {
+class ItemList extends ComponentView<{ items: View[] }> {
     wantsChildLayout = true;
-    parentWidth = 0;
-    visibleBoundsY: [number, number] | null = null;
 
-    items = [];
+    _byFormVar?: WeakMap<FormVar, { name?: string, refExpr?: ExprFactory }>;
+    _byExtDef?: WeakMap<RawExpr, { name?: string, refExpr?: ExprFactory }>;
+    _byDef?: WeakMap<Def, { name?: string, refExpr?: ExprFactory, callExpr?: ExprFactory }>;
 
-    layout () {
-        super.layout();
+    constructor(props) {
+        super(props);
 
-        let width = 0;
-        let y = 8;
-
-        for (const item of this.items) {
-            item.parentWidth = this.parentWidth - 32;
-            item.layoutIfNeeded();
-            item.position = [16, y];
-            y += item.size[1] + 8;
-            width = Math.max(width, 32 + item.size[0]);
-        }
-
-        this.layer.size = [width, y];
+        this.layoutProps.layout = 'flex';
+        this.layoutProps.direction = 'vertical';
+        this.layoutProps.crossAlign = 'start';
+        this.layoutProps.padding = new Vec2(8, 8);
+        this.layoutProps.gap = 8;
     }
 
-    *iterSubviews () {
-        for (const item of this.items) {
-            if (this.visibleBoundsY) {
-                const boundMin = item.position[1];
-                const boundMax = item.position[1] + item.size[1];
-                const isVisible = boundMax > this.visibleBoundsY[0] && boundMin < this.visibleBoundsY[1];
-                if (!isVisible) continue;
-            }
-            yield item;
-        }
+    renderContents(): VNode<any> | VNode<any>[] {
+        return this.props.items;
     }
 }
 

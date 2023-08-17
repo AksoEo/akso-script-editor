@@ -5,7 +5,7 @@ import {
     toRawDefs,
     toRawExpr,
     resolveRefs,
-    cloneWithContext,
+    cloneWithContext, Defs,
 } from './model';
 import { viewPool } from './proto-pool';
 import { DefsView } from './defs-view';
@@ -25,8 +25,16 @@ export class CanvasView extends View {
     /// Root defs view
     defsView = null;
 
+    library: Library;
+    rawExprRoot: Defs;
+
+    wantsChildLayout = true;
+
     constructor () {
         super();
+
+        this.layoutProps.flexGrow = 1;
+        this.layoutProps.layout = 'flex';
 
         this.modelCtx = createContext();
         this.modelCtx.onMutation(this.#onMutation);
@@ -37,7 +45,6 @@ export class CanvasView extends View {
         this.root = fromRawDefs({}, this.modelCtx);
         this.defsView = new DefsView(this.root);
         this.library = new Library(this.defsView);
-        this.library.onRequestLinearView = () => this.exitGraphView();
 
         this.addSubview(this.library);
         this.addSubview(this.defsView);
@@ -46,7 +53,7 @@ export class CanvasView extends View {
     isInRawExprMode = false;
     setRawExprMode (options) {
         this.isInRawExprMode = true;
-        this.library.setRawExprMode(options);
+        this.library.setRawExprMode();
         this.defsView.setRawExprMode(options);
         this.rawExprRoot = fromRawDefs({}, this.modelCtx);
     }
@@ -100,27 +107,6 @@ export class CanvasView extends View {
         }
         this.#mutations = null;
     };
-
-    get isInGraphView () {
-        return this.defsView.useGraphView;
-    }
-
-    exitGraphView () {
-        const t = new Transaction(1, 1);
-        this.defsView.useGraphView = false;
-        if (this._libraryWasOpen) {
-            this.library.open();
-        }
-        t.commitAfterLayout(this.ctx);
-    }
-    enterGraphView () {
-        if (this.isInRawExprMode) return;
-        const t = new Transaction(1, 1);
-        this.defsView.useGraphView = true;
-        this._libraryWasOpen = this.library.isOpen;
-        this.library.close();
-        t.commitAfterLayout(this.ctx);
-    }
 
     isInCodeMode = false;
     enterCodeMode () {
@@ -192,24 +178,9 @@ export class CanvasView extends View {
     }
 
     layout () {
-        super.layout();
-        this.ctx.canvas = this;
-        this.library.size = [
-            this.library.isMinimized()
-                ? this.library.getMinimizedWidth()
-                : Math.min(this.size[0] * 0.5, 300),
-            this.size[1],
-        ];
-        this.library.layout();
         this.defsView.leftTrash = !this.library.isMinimized();
-        this.defsView.leftTrashWidth = this.library.size[0];
+        this.defsView.leftTrashWidth = this.library.size.x;
         this.defsView.defs = this.root;
-        this.defsView.position = [this.library.size[0], 0];
-        this.defsView.size = [
-            this.size[0] - this.library.size[0],
-            this.size[1],
-        ];
-        this.defsView.needsLayout = true;
 
         const absPos = this.absolutePosition;
         if (this.ctx.codeMirrorNode) {
@@ -220,6 +191,8 @@ export class CanvasView extends View {
         if (this.ctx.helpSheet) {
             this.ctx.helpSheet.node.style.top = absPos[1] + 'px';
         }
+
+        return super.layout();
     }
 
     /// Loads a raw asc root node.
@@ -240,7 +213,7 @@ export class CanvasView extends View {
         this.modelCtx.notifyFormVarsMutation();
     }
 
-    resolveRefs (reducing) {
+    resolveRefs (reducing?: boolean) {
         if (this.isInRawExprMode) {
             resolveRefs(this.rawExprRoot, reducing);
         } else {

@@ -1,30 +1,82 @@
 import { Layer } from './layer';
-import { Gesture } from './gesture';
+import { Gesture, GestureHandler } from './gesture';
 import { BaseLayer } from './layer/base';
 import { ViewContext } from './context';
+import { RawVec2, Vec2 } from '../spring';
+import { FlexMainAlignOffset, layout, layoutIntrinsicSize } from './layout';
 
-/// A UI view.
-///
-/// Has a list of direct sublayers, and a list of subviews.
+export interface LayoutProps {
+    /** Layout type */
+    layout: 'flex' | 'z-stack' | 'none';
+    /** Flex direction */
+    direction: 'horizontal' | 'vertical';
+    /** Flex ordering */
+    order: number | null;
+    /** Flex padding */
+    padding: Vec2;
+    /** Max width */
+    maxWidth: number | null;
+    /** Max height */
+    maxHeight: number | null;
+    /** If true, will allow endless max size for children. Useful for scroll views. */
+    overflowMaxSize: boolean;
+    /** Gap for subviews */
+    gap: number;
+    /** Will fill remaining space with this view */
+    flexGrow: number;
+    /** Will shrink this view if necessary */
+    flexShrink: number;
+    /** Flex main alignment */
+    mainAlign: 'start' | 'center' | 'end' | 'stretch' | FlexMainAlignOffset,
+    /** Flex cross alignment */
+    crossAlign: 'start' | 'center' | 'end' | 'stretch';
+    /** Flex cross alignment of this view */
+    crossAlignSelf: null | 'start' | 'center' | 'end' | 'stretch';
+}
+
+/**
+ * A UI view.
+ *
+ * Has a list of direct sublayers, and a list of subviews.
+ */
 export class View {
     layer = new Layer(this);
 
-    /// Gesture recognizers.
+    /** Gesture recognizers. */
     gestures = new Set<Gesture>();
 
-    /// Set this to true to have your own needsLayout set to true when a child updates.
+    /** Set this to true to have your own needsLayout set to true when a child updates. */
     wantsChildLayout = false;
 
-    /// Current context.
+    /** Current context. */
     ctx: ViewContext | null = null;
 
-    /// Parent view.
+    /** Parent view. */
     #parent: View | null = null;
 
-    /// List of sublayers.
+    /** List of sublayers. */
     #sublayers: BaseLayer[] = [];
-    /// List of subviews.
+    /** List of subviews. */
     #subviews: View[] = [];
+
+    /** If true, this view has no interactivity. */
+    decorationOnly = false;
+
+    layoutProps: LayoutProps = {
+        layout: 'none',
+        direction: 'horizontal',
+        order: null,
+        padding: Vec2.zero(),
+        maxWidth: null,
+        maxHeight: null,
+        overflowMaxSize: false,
+        gap: 0,
+        flexGrow: 0,
+        flexShrink: 0,
+        mainAlign: 'start',
+        crossAlign: 'stretch',
+        crossAlignSelf: null,
+    };
 
     /// Returns a list of sublayers. Please do not mutate this list.
     get sublayers () {
@@ -35,16 +87,16 @@ export class View {
         return this.#subviews;
     }
 
-    get position () {
+    get position (): Vec2 {
         return this.layer.position;
     }
-    set position (v) {
+    set position (v: Vec2 | RawVec2) {
         this.layer.position = v;
     }
-    get size () {
+    get size (): Vec2 {
         return this.layer.size;
     }
-    set size (v) {
+    set size (v: Vec2 | RawVec2) {
         if (v[0] === this.layer.size[0] && v[1] === this.layer.size[1]) return;
         this.layer.size = v;
         this.needsLayout = true;
@@ -52,6 +104,8 @@ export class View {
     get absolutePosition () {
         return this.layer.absolutePosition;
     }
+
+    inheritedMaxSize = Vec2.zero();
 
     get parent () {
         return this.#parent;
@@ -62,31 +116,46 @@ export class View {
         return this.#needsLayout;
     }
     set needsLayout (value) {
-        if (value && this.ctx) this.ctx.render.scheduleLayout(this);
+        if (value && this.ctx) {
+            if (this.parent?.wantsChildLayout || this.parent?.layoutProps.layout === 'flex') {
+                this.parent.needsLayout = true;
+            } else {
+                this.ctx.render.scheduleLayout(this);
+            }
+        }
         this.#needsLayout = value;
     }
 
-    /// Lays out this view (and possibly subviews) if needed.
-    ///
-    /// (Also see needsLayout)
+    /**
+     * Lays out this view (and possibly subviews) if needed.
+     *
+     * (Also see needsLayout)
+     */
     layoutIfNeeded () {
-        if (this.needsLayout) this.layout();
+        if (this.needsLayout) return this.layout();
+        return this.size;
     }
 
-    /// Runs layout.
-    layout () {
+    /** Applies layout. */
+    layout (): Vec2 {
         this.#cachedSublayers = null;
         this.#cachedSubviews = null;
+
         this.needsLayout = false;
-        if (this.parent && this.parent.wantsChildLayout) this.parent.needsLayout = true;
+        return layout(this);
     }
 
-    addSublayer (layer) {
+    /** Returns the intrinsic size of this view. */
+    getIntrinsicSize (): Vec2 {
+        return layoutIntrinsicSize(this);
+    }
+
+    addSublayer (layer: BaseLayer) {
         if (this.#sublayers.includes(layer)) return;
         this.#sublayers.push(layer);
         this.layer.addSublayer(layer);
     }
-    removeSublayer (layer) {
+    removeSublayer (layer: BaseLayer) {
         const index = this.#sublayers.indexOf(layer);
         if (index !== -1) {
             this.#sublayers.splice(index, 1);
@@ -94,19 +163,47 @@ export class View {
         }
     }
 
-    addSubview (view: View) {
+    private addSubviewImpl (view: View, doMount: () => void) {
         if (!view) throw new Error('missing view argument');
-        if (this.#subviews.includes(view)) return;
+        if (this.#subviews.includes(view)) return false;
         if (view.parent) {
             console.warn('View is still mounted somewhere', 'self, other parent, subview:', this, view.parent, view);
             view.parent.removeSubview(view);
         }
-        this.#subviews.push(view);
+        doMount();
         this.layer.addSublayer(view.layer);
         if (this.ctx) view.didAttach(this.createSubContext());
         view.didMount(this);
+        return true;
     }
-    removeSubview (view) {
+
+    addSubview (view: View) {
+        this.addSubviewImpl(view, () => {
+            this.#subviews.push(view);
+        });
+    }
+
+    replaceSubview (prev: View | null, next: View) {
+        if (prev === next) return;
+
+        const index = this.#subviews.indexOf(prev);
+        if (index > -1 || !prev) {
+            if (prev) {
+                this.layer.removeSublayer(prev.layer);
+                prev.didUnmount();
+                if (this.ctx) prev.didDetach();
+            }
+            this.addSubviewImpl(next, () => {
+                if (index > -1) {
+                    this.#subviews[index] = next;
+                } else {
+                    this.#subviews.push(next);
+                }
+            });
+        }
+    }
+
+    removeSubview (view: View) {
         const index = this.#subviews.indexOf(view);
         if (index !== -1) {
             this.#subviews.splice(index, 1);
@@ -176,7 +273,7 @@ export class View {
         this.layer.needsDisplay = true;
     }
 
-    getGesturesForType (type: Gesture.Type, pointerType: Gesture.PointerType) {
+    getGesturesForType (type: Gesture.Type, pointerType: Gesture.PointerType): GestureHandler[] {
         const gestures = [];
         for (const g of this.gestures) {
             const handler = g.getHandlerForType(type, pointerType);
@@ -229,4 +326,12 @@ export class View {
     didUnmount () {
         this.#parent = null;
     }
+
+    onPointerEnter(event: { x: number, y: number, absX: number, absY: number }) {
+        void event;
+    }
+    onPointerMove(event: { x: number, y: number, absX: number, absY: number }) {
+        void event;
+    }
+    onPointerExit() {}
 }

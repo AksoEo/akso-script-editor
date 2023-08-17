@@ -1,6 +1,7 @@
 import { Window, View, Layer, TextLayer, PathLayer, Transaction, Gesture } from './ui';
 import config from './config';
 import { InputCapture, PushedWindow } from './ui/context';
+import { Vec2 } from './spring';
 
 /// A dropdown.
 ///
@@ -101,6 +102,11 @@ export class Dropdown extends View {
 
     hitTargets = [];
     highlight = null;
+
+    getIntrinsicSize(): Vec2 {
+        // FIXME: don't do this probably
+        return this.layoutIfNeeded();
+    }
 
     layout () {
         super.layout();
@@ -264,6 +270,8 @@ export class Dropdown extends View {
         }
 
         this.layer.opacity = this.hasTentativeChild ? 0.5 : 1;
+
+        return this.size;
     }
 
     expand (x, y) {

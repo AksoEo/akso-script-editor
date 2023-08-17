@@ -1,19 +1,20 @@
 import { USE_WAAPI, BaseLayer, svgNS, vec2rgb, getTransaction, LayerProperty } from './base';
 import { View } from '../view';
+import { RawVec2, RawVec4, Vec1, Vec2, Vec4 } from '../../spring';
 
 /// A simple graphics layer.
 ///
 /// Only a view's designated backing layer should have its owner field set.
 export class Layer extends BaseLayer {
-    #background = new LayerProperty([0, 0, 0, 0]);
-    #stroke = new LayerProperty([0, 0, 0, 0]);
-    #strokeWidth = new LayerProperty([0]);
-    #cornerRadius = new LayerProperty([0]);
-    #position = new LayerProperty([0, 0]);
-    #size = new LayerProperty([0, 0]);
-    #scale = new LayerProperty([1]);
-    #rotation = new LayerProperty([0]);
-    #opacity = new LayerProperty([1]);
+    #background = new LayerProperty(new Vec4(0, 0, 0, 0));
+    #stroke = new LayerProperty(new Vec4(0, 0, 0, 0));
+    #strokeWidth = new LayerProperty(new Vec1(0));
+    #cornerRadius = new LayerProperty(new Vec1(0));
+    #position = new LayerProperty(new Vec2(0, 0));
+    #size = new LayerProperty(new Vec2(0, 0));
+    #scale = new LayerProperty(new Vec1(1));
+    #rotation = new LayerProperty(new Vec1(0));
+    #opacity = new LayerProperty(new Vec1(1));
     #sublayers = new Set<BaseLayer>();
     #clipContents = false;
 
@@ -59,9 +60,9 @@ export class Layer extends BaseLayer {
             }, {
                 duration: keyframes.length * 1000 / 60,
             }));
-            this.#position.waAnimation = anim;
-            this.#scale.waAnimation = anim;
-            this.#rotation.waAnimation = anim;
+            this.#position.waAnimation = [anim];
+            this.#scale.waAnimation = [anim];
+            this.#rotation.waAnimation = [anim];
             anim.play();
         };
         const waSizeCommit = (k) => {
@@ -79,9 +80,10 @@ export class Layer extends BaseLayer {
         };
         const waPropCommit = (node, prop, map) => (k) => {
             const kf = k.getKeyframes().map(map);
-            const anim = k.waAnimation = new Animation(new KeyframeEffect(node, {
+            const anim = new Animation(new KeyframeEffect(node, {
                 [prop]: kf,
             }, { duration: kf.length * 1000 / 60 }));
+            k.waAnimation = [anim];
             anim.play();
         };
 
@@ -119,6 +121,7 @@ export class Layer extends BaseLayer {
         if (this.owner) {
             this.node.dataset.class = this.owner.constructor.name;
         }
+        (this.node as any)._layer = this;
 
         const fill = this.#background.getWADynamic();
         const stroke = this.#stroke.getWADynamic();
@@ -186,7 +189,7 @@ export class Layer extends BaseLayer {
         super.didUnmount();
     }
 
-    addSublayer (layer) {
+    addSublayer (layer: BaseLayer) {
         this.#sublayers.add(layer);
         if (layer.parent) {
             console.warn('Layer is still mounted somewhere', 'self, other parent, sublayer:', this, layer.parent, layer);
@@ -194,10 +197,11 @@ export class Layer extends BaseLayer {
         }
         layer.parent = this;
         layer.didMount(this.ctx);
+
         this.node.appendChild(layer.node);
     }
 
-    removeSublayer (layer) {
+    removeSublayer (layer: BaseLayer) {
         if (this.#sublayers.has(layer)) {
             this.#sublayers.delete(layer);
             if (layer.node.parentNode === this.node) {
@@ -220,58 +224,58 @@ export class Layer extends BaseLayer {
         this.needsDisplay = true;
     }
 
-    get background () {
+    get background (): Vec4 {
         return this.#background.getStatic();
     }
-    set background (value) {
-        if (this.#background.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set background (value: Vec4 | RawVec4) {
+        if (this.#background.setStatic(Vec4.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get stroke () {
+    get stroke (): Vec4 {
         return this.#stroke.getStatic();
     }
-    set stroke (value) {
-        if (this.#stroke.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set stroke (value: Vec4 | RawVec4) {
+        if (this.#stroke.setStatic(Vec4.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get strokeWidth () {
-        return this.#strokeWidth.getStatic()[0];
+    get strokeWidth (): number {
+        return this.#strokeWidth.getStatic().x;
     }
-    set strokeWidth (value) {
-        if (this.#strokeWidth.setStatic([value], getTransaction())) this.needsDisplay = true;
+    set strokeWidth (value: number) {
+        if (this.#strokeWidth.setStatic(new Vec1(value), getTransaction())) this.needsDisplay = true;
     }
-    get cornerRadius () {
-        return this.#cornerRadius.getStatic()[0];
+    get cornerRadius (): number {
+        return this.#cornerRadius.getStatic().x;
     }
     set cornerRadius (value) {
-        if (this.#cornerRadius.setStatic([value], getTransaction())) this.needsDisplay = true;
+        if (this.#cornerRadius.setStatic(new Vec1(value), getTransaction())) this.needsDisplay = true;
     }
-    get position () {
+    get position (): Vec2 {
         return this.#position.getStatic();
     }
-    set position (value) {
-        if (this.#position.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set position (value: Vec2 | RawVec2) {
+        if (this.#position.setStatic(Vec2.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get size () {
+    get size (): Vec2 {
         return this.#size.getStatic();
     }
-    set size (value) {
-        if (this.#size.setStatic(value, getTransaction())) this.needsDisplay = true;
+    set size (value: Vec2 | RawVec2) {
+        if (this.#size.setStatic(Vec2.from(value), getTransaction())) this.needsDisplay = true;
     }
-    get scale () {
-        return this.#scale.getStatic()[0];
+    get scale (): number {
+        return this.#scale.getStatic().x;
     }
-    set scale (value) {
-        if (this.#scale.setStatic([value], getTransaction())) this.needsDisplay = true;
+    set scale (value: number) {
+        if (this.#scale.setStatic(new Vec1(value), getTransaction())) this.needsDisplay = true;
     }
-    get rotation () {
-        return this.#rotation.getStatic()[0];
+    get rotation (): number {
+        return this.#rotation.getStatic().x;
     }
-    set rotation (value) {
-        if (this.#rotation.setStatic([value], getTransaction())) this.needsDisplay = true;
+    set rotation (value: number) {
+        if (this.#rotation.setStatic(new Vec1(value), getTransaction())) this.needsDisplay = true;
     }
-    get opacity () {
-        return this.#opacity.getStatic()[0];
+    get opacity (): number {
+        return this.#opacity.getStatic().x;
     }
-    set opacity (value) {
-        if (this.#opacity.setStatic([value], getTransaction())) this.needsDisplay = true;
+    set opacity (value: number) {
+        if (this.#opacity.setStatic(new Vec1(value), getTransaction())) this.needsDisplay = true;
     }
 }

@@ -77,6 +77,8 @@ export interface FormVar {
     name: string;
     type: 'u' | 'b' | 'n' | 's' | 'm' | 'timestamp';
     value: null | boolean | number | string | RawMatrixValue | Date;
+    ctx: AscContext;
+    parent: null;
 }
 
 export interface BaseNode {
@@ -113,6 +115,7 @@ export interface ExternalDef extends BaseNode {
 interface ReverseRef {
     def: Def;
     source: Expr.Any;
+    name?: string;
 }
 type ForwardRef = ForwardRefDef | ForwardRefFormVar;
 interface ForwardRefDef {
@@ -194,7 +197,22 @@ export namespace Expr {
         infix?: boolean;
     }
 
+    export interface Timestamp extends BaseExpr {
+        type: 'timestamp';
+        value: Date;
+    }
+
     export type Any = Null | Bool | Number | String | Matrix | List | Call | FnDef | Switch | Ref;
+    export type AnyRuntime = Any | Timestamp;
+
+    export function anyRuntimeAsAny(expr: Expr.AnyRuntime): Expr.Any | null {
+        switch (expr.type) {
+            case 'timestamp':
+                return null;
+            default:
+                return expr;
+        }
+    }
 }
 
 export type AnyNode = Expr.Any | Defs | Def;
@@ -889,7 +907,7 @@ export function evalExpr (expr: Expr.Any) {
     };
 }
 
-export function cloneWithContext (node: AnyNode, ctx: AscContext, clearParents?: boolean): AnyNode {
+export function cloneWithContext(node: AnyNode, ctx: AscContext, clearParents?: boolean): AnyNode {
     if (!node || !('type' in node)) return null as any;
     if (node.type === NODE_NULL) {
         return {

@@ -4,6 +4,8 @@ import { Window } from './window';
 import { CodeEditor } from '../code-editor';
 import { HelpSheet } from '../help/help-sheet';
 import { History } from '../history';
+import { RawVec2, Vec2 } from '../spring';
+import { AscContext } from '../model';
 
 export interface ViewContext {
     render: {
@@ -15,8 +17,8 @@ export interface ViewContext {
     beginCapture(view: View): InputCapture;
     push(view: View): PushedWindow;
     beginInput: null | ((
-        pos: [number, number],
-        size: [number, number],
+        pos: Vec2 | RawVec2,
+        size: Vec2 | RawVec2 | [number, number, number],
         text: string,
         style?: { [k: string]: string },
     ) => Promise<string>);
@@ -27,6 +29,7 @@ export interface ViewContext {
     isInDupMode?: boolean;
     isInTestMode?: boolean;
     history: History;
+    modelCtx?: AscContext;
 }
 
 export interface InputCapture {

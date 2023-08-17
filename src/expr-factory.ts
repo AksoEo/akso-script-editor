@@ -13,6 +13,8 @@ export class ExprFactory extends View {
     expr: Expr.Any;
     exprView: ExprView;
 
+    wantsChildLayout = true;
+
     constructor (lib: Library, makeExpr: MakeExprFn) {
         super();
         this.lib = lib;
@@ -25,15 +27,13 @@ export class ExprFactory extends View {
 
         this.exprView = new ExprView(this.expr);
         this.exprView.noInteraction = true;
-        this.exprView._isDemo = true;
+        this.exprView.isInert = true;
         this.exprView.decorationOnly = true;
         this.addSubview(this.exprView);
 
         Gesture.onTap(this, this.onTap);
         Gesture.onDrag(this, this.onDragMove, this.onDragStart, this.onDragEnd, this.onDragCancel);
     }
-
-    wantsChildLayout = true;
 
     update = makeExpr => {
         this.makeExpr = makeExpr;
@@ -44,8 +44,8 @@ export class ExprFactory extends View {
 
     layout () {
         super.layout();
-        this.exprView.layoutIfNeeded();
-        this.layer.size = this.exprView.size;
+        this.exprView.size = this.layer.size;
+        return this.exprView.layoutIfNeeded();
     }
 
     #createdDragRef = null;

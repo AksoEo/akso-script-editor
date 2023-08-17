@@ -1,7 +1,8 @@
-import PointerTracker, { InputEvent } from 'pointer-tracker';
+import PointerTracker, { InputEvent, Pointer } from 'pointer-tracker';
 import { Gesture } from './gesture';
 import { RenderViewRoot } from './render-view-root';
 import { View } from './view';
+import { Vec2 } from '../spring';
 
 /// View root handler. Handles interfacing with the DOM and time. Has a fixed size.
 export class ViewRoot extends RenderViewRoot {
@@ -95,7 +96,7 @@ export class ViewRoot extends RenderViewRoot {
         });
     };
 
-    dragPointer = pointer => {
+    dragPointer = (pointer: Pointer) => {
         const rect = this.node.getBoundingClientRect();
         const x = pointer.clientX - rect.left;
         const y = pointer.clientY - rect.top;
@@ -123,7 +124,7 @@ export class ViewRoot extends RenderViewRoot {
             }
         }
     };
-    endPointer = pointer => {
+    endPointer = (pointer: Pointer) => {
         const rect = this.node.getBoundingClientRect();
         const x = pointer.clientX - rect.left;
         const y = pointer.clientY - rect.top;
@@ -141,8 +142,8 @@ export class ViewRoot extends RenderViewRoot {
         }
     };
 
-    #lastHoverTargetView = null;
-    #onMouseMove = event => {
+    #lastHoverTargetView: View | null = null;
+    #onMouseMove = (event: MouseEvent) => {
         const rect = this.node.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
@@ -155,7 +156,7 @@ export class ViewRoot extends RenderViewRoot {
             chosenTarget = targets[targets.length - 1]; // last target is on top due to DFS order
         }
         if (!chosenTarget) return;
-        const chosenView = chosenTarget.target;
+        const chosenView: View = chosenTarget.target;
 
         let didEnter = false;
         if (chosenView !== this.#lastHoverTargetView) {
@@ -166,14 +167,14 @@ export class ViewRoot extends RenderViewRoot {
             this.#lastHoverTargetView = chosenView;
         }
 
-        if (didEnter && chosenTarget.target.onPointerEnter) {
+        if (didEnter && chosenView.onPointerEnter) {
             chosenView.onPointerEnter({
                 x: x - chosenTarget.x,
                 y: y - chosenTarget.y,
                 absX: x,
                 absY: y,
             });
-        } else if (chosenTarget.target.onPointerMove) {
+        } else if (chosenView.onPointerMove) {
             chosenView.onPointerMove({
                 x: x - chosenTarget.x,
                 y: y - chosenTarget.y,
@@ -183,7 +184,7 @@ export class ViewRoot extends RenderViewRoot {
         }
     };
 
-    #onWheel = event => {
+    #onWheel = (event: WheelEvent) => {
         const rect = this.node.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
@@ -247,6 +248,7 @@ export class ViewRoot extends RenderViewRoot {
         for (const item of this.windows) {
             if (!item.wantsRootSize) continue;
             if (item.size[0] === this.width && item.size[1] === this.height) continue;
+            item.inheritedMaxSize = new Vec2(this.width, this.height);
             item.size = [this.width, this.height];
             item.needsLayout = true;
         }

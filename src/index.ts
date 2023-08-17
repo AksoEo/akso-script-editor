@@ -16,7 +16,7 @@ export { Window, RenderViewRoot };
 /// An AKSO Script editor.
 export default class Editor {
     root = new ViewRoot();
-    editor = new EditorView();
+    editor = new EditorView({});
     textInput = new TextInput();
     codeEditor = new CodeEditor();
     helpSheet: HelpSheet;

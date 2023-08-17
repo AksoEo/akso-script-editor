@@ -4,6 +4,7 @@ import { DefsView, DefView, Trash } from './defs-view';
 import { ExprSlot, ExprView } from './expr-view';
 import { AnyNode, Def, Expr, remove as removeNode } from './model';
 import { PushedWindow } from './ui/context';
+import { Vec2 } from './spring';
 
 export interface DragSlot {
     isEmpty?: boolean;
@@ -12,10 +13,10 @@ export interface DragSlot {
 }
 
 export interface IExprDragController {
-    beginExprDrag(expr: Expr.Any, x: number, y: number);
-    moveExprDrag(x: number, y: number);
-    endExprDrag();
-    cancelExprDrag();
+    beginExprDrag(expr: Expr.Any, x: number, y: number): void;
+    moveExprDrag(x: number, y: number): void;
+    endExprDrag(): void;
+    cancelExprDrag(): void;
 }
 
 export class DragController implements IExprDragController {
@@ -39,9 +40,9 @@ export class DragController implements IExprDragController {
         this.#draggingNode = def;
         this.#currentSlot = null;
         const defView = getProtoView(def, DefView);
-        this.#onlyYXPos = defView.absolutePosition[0];
+        this.#onlyYXPos = defView.absolutePosition.x;
 
-        if (!this.defs.useGraphView) {
+        {
             this.#removal = removeNode(def);
             defView.parent?.removeSubview(defView);
             // FIXME: don't do this
@@ -53,32 +54,25 @@ export class DragController implements IExprDragController {
         }
 
         defView._isBeingDragged = true;
-        this.#onlyY = !defView.usingGraphView;
-        if (this.defs.useGraphView) {
-            this.#dragOffset = [
-                defView.position[0] - x,
-                defView.position[1] - y,
-            ];
-        } else {
-            this.#dragOffset = [
-                defView.position[0] - x - this.defs.offset[0],
-                defView.position[1] - y - this.defs.offset[1],
-            ];
-        }
+        this.#onlyY = true;
+        this.#dragOffset = [
+            defView.position.x - x - this.defs.scrollView.offset.x,
+            defView.position.y - y - this.defs.scrollView.offset.y,
+        ];
         const t = new Transaction(1, 0);
         defView.position = [
             this.#onlyY ? this.#onlyYXPos : x + this.#dragOffset[0],
             y + this.#dragOffset[1],
         ];
         t.commit();
-        const transaction = new Transaction(1, this.defs.useGraphView ? 0.3 : 0);
-        this.defs.putTentative(defView.position[1] + this.defs.offset[1], defView.size[1]);
+        const transaction = new Transaction(1, 0.3);
+        this.defs.putTentative(defView.position.y + this.defs.scrollView.offset.y, defView.size.y);
         transaction.commitAfterLayout(this.defs.ctx);
     }
     moveDefDrag (x: number, y: number) {
         this.moveDrag(x, y, DefView, slot => slot.acceptsDef);
         const defView = getProtoView(this.#draggingNode, DefView);
-        this.defs.putTentative(defView.position[1] + this.defs.offset[1], defView.size[1]);
+        this.defs.putTentative(defView.position.y + this.defs.scrollView.offset.y, defView.size.y);
     }
     endDefDrag () {
         this.defs.showTrash = false;
@@ -90,11 +84,11 @@ export class DragController implements IExprDragController {
                 this.worldHandle = null;
                 defView.parent.removeSubview(defView);
 
-                // draggingnode will be inserted into defs, so accomodate for scroll pos
+                // draggingnode will be inserted into defs, so accommodate for scroll pos
                 const t = new Transaction(1, 0);
                 defView.position = [
-                    defView.position[0] + this.defs.offset[0],
-                    defView.position[1] + this.defs.offset[1],
+                    defView.position.x + this.defs.scrollView.offset.x,
+                    defView.position.y + this.defs.scrollView.offset.y,
                 ];
                 t.commit();
 
@@ -125,8 +119,8 @@ export class DragController implements IExprDragController {
                     const pos = exprView.absolutePosition;
                     const defsPos = this.defs.absolutePosition;
                     exprView.position = [
-                        pos[0] - defsPos[0],
-                        pos[1] - defsPos[1],
+                        pos.x - defsPos.x,
+                        pos.y - defsPos.y,
                     ];
                     transaction.commit();
 
@@ -149,8 +143,8 @@ export class DragController implements IExprDragController {
             transaction.commitAfterLayout(this.defs.ctx);
         }
         this.#dragOffset = [
-            exprView.position[0] - x,
-            exprView.position[1] - y,
+            exprView.position.x - x,
+            exprView.position.y - y,
         ];
     }
     moveExprDrag (x: number, y: number) {
@@ -195,10 +189,10 @@ export class DragController implements IExprDragController {
 
         const exprView = getProtoView(this.#draggingNode, TypeClass);
 
-        let newPos = [
+        let newPos = new Vec2(
             this.#onlyY ? this.#onlyYXPos : x + this.#dragOffset[0],
             y + this.#dragOffset[1],
-        ];
+        );
         let newScale = 1;
 
         if (slot !== this.#currentSlot) {
@@ -229,10 +223,8 @@ export class DragController implements IExprDragController {
             let pointerDist = Math.hypot(unadjustedCenter[1] - center[1], unadjustedCenter[0] - center[0]);
             pointerDist /= 3;
 
-            newPos = [
-                center[0] + Math.cos(pointerAngle) * pointerDist - exprView.size[0] / 2,
-                center[1] + Math.sin(pointerAngle) * pointerDist - exprView.size[1] / 2,
-            ];
+            newPos.x = center[0] + Math.cos(pointerAngle) * pointerDist - exprView.size[0] / 2;
+            newPos.y = center[1] + Math.sin(pointerAngle) * pointerDist - exprView.size[1] / 2;
 
             if (this.#currentSlot instanceof Trash) newScale = 0.5;
         }
