@@ -95,6 +95,10 @@ export class DefsView extends View {
 
         this.defs.defs.add(newDef);
         this.defs.ctx.notifyMutation(this.defs);
+
+        this.innerDefs.flushSubviews();
+        this.innerDefs.syncSubnodes();
+
         t.commitAfterLayout(this.ctx);
     };
 

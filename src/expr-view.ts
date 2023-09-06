@@ -20,6 +20,7 @@ import { HelpTagged } from './help/help-tag';
 import { Vec2 } from './spring';
 import anyRuntimeAsAny = Expr.anyRuntimeAsAny;
 
+// eslint-disable-next-line no-unused-vars
 type OnInsertExpr = (expr: Expr.Any) => void;
 
 interface ExprUI {
@@ -465,17 +466,17 @@ type AnyExprView = RefExprView | NullExprView | BoolExprView | NumberExprView | 
 
 function getImplForExpr(expr: Expr.AnyRuntime) {
     switch (expr.type) {
-        case 'r': return RefExprView;
-        case 'u': return NullExprView;
-        case 'b': return BoolExprView;
-        case 'n': return NumberExprView;
-        case 's': return StringExprView;
-        case 'm': return MatrixExprView;
-        case 'l': return ListExprView;
-        case 'c': return CallExprView;
-        case 'f': return FnDefExprView;
-        case 'w': return SwitchExprView;
-        case 'timestamp': return TimestampExprView;
+    case 'r': return RefExprView;
+    case 'u': return NullExprView;
+    case 'b': return BoolExprView;
+    case 'n': return NumberExprView;
+    case 's': return StringExprView;
+    case 'm': return MatrixExprView;
+    case 'l': return ListExprView;
+    case 'c': return CallExprView;
+    case 'f': return FnDefExprView;
+    case 'w': return SwitchExprView;
+    case 'timestamp': return TimestampExprView;
     }
 }
 
@@ -1310,7 +1311,7 @@ class CallExprView extends View {
             labelHeight = Math.max(labelHeight, labelSize.y);
 
             width += config.primitives.paddingX;
-            width += this.isInfix ? slot.size.x : Math.max(slotSize.x, labelSize.x);
+            width += this.isInfix ? slotSize.x : Math.max(slotSize.x, labelSize.x);
             height = Math.max(height, slotSize.y);
         }
 
@@ -1335,7 +1336,7 @@ class CallExprView extends View {
 
         for (let i = 0; i < this.argSlots.length; i++) {
             const slot = this.argSlots[i];
-            slot.size = slot.layoutIfNeeded();
+            slot.size = slot.getIntrinsicSize();
             height = Math.max(height, slot.size.y);
         }
 
@@ -1359,9 +1360,9 @@ class CallExprView extends View {
 
             width += config.primitives.paddingX;
 
+            slot.size = slot.layoutIfNeeded();
             const itemWidth = this.isInfix ? slot.size.x : Math.max(slot.size.x, labelSize.x);
 
-            slot.size = slot.getIntrinsicSize();
             slot.layout();
             slot.position = [width + (itemWidth - slot.size.x) / 2, (height - slot.size.y) / 2];
             label.position = [width + itemWidth / 2, height];
