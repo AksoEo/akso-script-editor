@@ -7,6 +7,7 @@ export class Scrollbar extends View {
     length = 0;
     scrollMax = 0;
     scroll = 0;
+    // eslint-disable-next-line no-unused-vars
     onScroll: ((delta: number) => void) = () => {};
 
     thumbLayer: Layer;
@@ -40,34 +41,34 @@ export class Scrollbar extends View {
         const thumbPos = (length - thumbSize) * (this.scroll / this.scrollMax);
 
         switch (this.orientation) {
-            case 'horizontal':
-                this.position = [posAlong, posAcross];
-                this.size = [length, config.scrollbar.size];
+        case 'horizontal':
+            this.position = [posAlong, posAcross];
+            this.size = [length, config.scrollbar.size];
 
-                if (this.scrollMax) {
-                    this.thumbLayer.size = [thumbSize, config.scrollbar.size];
-                    this.thumbLayer.position = [thumbPos, 0];
-                    this.thumbLayer.opacity = 1;
-                } else {
-                    this.thumbLayer.position = [0, 0];
-                    this.thumbLayer.size = [length, config.scrollbar.size];
-                    this.thumbLayer.opacity = 0;
-                }
-                break;
-            case 'vertical':
-                this.position = [posAcross, posAlong];
-                this.size = [config.scrollbar.size, length];
+            if (this.scrollMax) {
+                this.thumbLayer.size = [thumbSize, config.scrollbar.size];
+                this.thumbLayer.position = [thumbPos, 0];
+                this.thumbLayer.opacity = 1;
+            } else {
+                this.thumbLayer.position = [0, 0];
+                this.thumbLayer.size = [length, config.scrollbar.size];
+                this.thumbLayer.opacity = 0;
+            }
+            break;
+        case 'vertical':
+            this.position = [posAcross, posAlong];
+            this.size = [config.scrollbar.size, length];
 
-                if (this.scrollMax) {
-                    this.thumbLayer.size = [config.scrollbar.size, thumbSize];
-                    this.thumbLayer.position = [0, thumbPos];
-                    this.thumbLayer.opacity = 1;
-                } else {
-                    this.thumbLayer.position = [0, 0];
-                    this.thumbLayer.size = [config.scrollbar.size, length];
-                    this.thumbLayer.opacity = 0;
-                }
-                break;
+            if (this.scrollMax) {
+                this.thumbLayer.size = [config.scrollbar.size, thumbSize];
+                this.thumbLayer.position = [0, thumbPos];
+                this.thumbLayer.opacity = 1;
+            } else {
+                this.thumbLayer.position = [0, 0];
+                this.thumbLayer.size = [config.scrollbar.size, length];
+                this.thumbLayer.opacity = 0;
+            }
+            break;
         }
 
         return this.size;

@@ -1,0 +1,20 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "env": {
+    "browser":  true,
+    "node":  true,
+    "es6": true
+  },
+  "plugins": ["@typescript-eslint"],
+  "rules": {
+    "no-unused-vars": "warn",
+    "semi": "warn",
+    "comma-dangle": ["warn", "always-multiline"],
+    "indent": "warn",
+    "no-trailing-spaces": "warn",
+    "yield-star-spacing": "warn",
+    "prefer-const": "warn",
+    "no-undef": "error",
+    "no-const-assign": "error"
+  }
+}

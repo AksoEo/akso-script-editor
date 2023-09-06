@@ -50,8 +50,9 @@ export class History {
             let bUndo = fn;
             let aRedo: any;
             let bRedo: any;
-            let undo, redo;
-            undo = () => {
+            // eslint-disable-next-line prefer-const
+            let redo;
+            const undo = () => {
                 bRedo = bUndo();
                 aRedo = aUndo();
                 return redo;
@@ -71,8 +72,9 @@ export class History {
     commitChange(label: HistoryLabel, fn: (() => () => void), data?: any) {
         const innerRedo = fn;
         let innerUndo = fn();
-        let undo, redo;
-        redo = () => {
+        // eslint-disable-next-line prefer-const
+        let undo;
+        const redo = () => {
             innerUndo = innerRedo();
             return undo;
         };

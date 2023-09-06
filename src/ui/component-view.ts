@@ -119,8 +119,10 @@ function diff(view: View, subviews_: VNode<any> | VNode<any>[]) {
     const newRender = { byKey: {}, unkeyed: [] };
 
     let unkeyedIndex = 0;
+    let i = 0;
     for (const subview of subviews) {
         if (!subview) continue;
+        const index = i++;
 
         let prevView: View | null = null;
         let key: string | null = null;
@@ -145,13 +147,13 @@ function diff(view: View, subviews_: VNode<any> | VNode<any>[]) {
             Object.assign(prevView.layoutProps, subview.layout);
         } else if (subview instanceof View) {
             if (prevView !== subview) {
-                view.replaceSubview(prevView, subview);
+                view.insertSubviewAtIndex(subview, index);
             }
             newView = subview;
         } else {
             newView = new subview.constructor(subview.props);
             Object.assign(newView.layoutProps, subview.layout);
-            view.replaceSubview(prevView, newView);
+            view.insertSubviewAtIndex(newView, index);
         }
 
         if (key !== null) {
@@ -162,7 +164,9 @@ function diff(view: View, subviews_: VNode<any> | VNode<any>[]) {
     }
 
     for (let i = unkeyedIndex; i < prevRender.unkeyed.length; i++) {
-        view.removeSubview(prevRender.unkeyed[i]);
+        if (!subviews.includes(prevRender.unkeyed[i])) {
+            view.removeSubview(prevRender.unkeyed[i]);
+        }
     }
 
     previousRenders.set(view, newRender);

@@ -183,23 +183,21 @@ export class View {
         });
     }
 
-    replaceSubview (prev: View | null, next: View) {
-        if (prev === next) return;
+    insertSubviewAtIndex (view: View, index: number) {
+        if (this.#subviews.indexOf(view) === index) return;
 
-        const index = this.#subviews.indexOf(prev);
-        if (index > -1 || !prev) {
-            if (prev) {
-                this.layer.removeSublayer(prev.layer);
-                prev.didUnmount();
-                if (this.ctx) prev.didDetach();
-            }
-            this.addSubviewImpl(next, () => {
-                if (index > -1) {
-                    this.#subviews[index] = next;
-                } else {
-                    this.#subviews.push(next);
-                }
+        if (view.parent === this) {
+            this.removeSubview(view);
+        }
+
+        if (this.#subviews[index]) {
+            this.removeSubview(this.#subviews[index]);
+
+            this.addSubviewImpl(view, () => {
+                this.#subviews.splice(index, 0, view);
             });
+        } else {
+            this.addSubview(view);
         }
     }
 

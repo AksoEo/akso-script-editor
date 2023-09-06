@@ -155,8 +155,10 @@ class FormVarItem extends ComponentView<{
     onRemove = () => {
         const t = new Transaction(1, 0.3);
         const idx = this.ctx.modelCtx.formVars.indexOf(this.var);
-        this.ctx.modelCtx.formVars.splice(idx, 1);
-        this.ctx.modelCtx.notifyFormVarsMutation();
+        if (idx > -1) {
+            this.ctx.modelCtx.formVars.splice(idx, 1);
+            this.ctx.modelCtx.notifyFormVarsMutation();
+        }
         t.commitAfterLayout(this.ctx);
     };
     onMutation = () => {
@@ -337,7 +339,7 @@ class RemoveFormVar extends ComponentView<{ onRemove: () => void }> {
         this.active = false;
         this.layout();
         t.commit();
-    }
+    };
 }
 
 class AddFormVar extends View {
