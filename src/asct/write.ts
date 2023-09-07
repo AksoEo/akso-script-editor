@@ -77,7 +77,7 @@ function writeList (expr: Expr.List) {
 
 function writeCall (expr: Expr.Call): Frag {
     if (expr.func.type !== 'r') {
-        throw new Error('not supported: callee is not a ref')
+        throw new Error('not supported: callee is not a ref');
     }
 
     const callee = (expr.func as Expr.Ref).name;

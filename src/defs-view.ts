@@ -505,7 +505,7 @@ export class DefView extends View implements IExprDragController {
             {
                 const trailingNumber = dupDef.name.match(/(\d+)$/);
                 if (trailingNumber) {
-                    dupDef.name = dupDef.name.substr(0, trailingNumber.index) + (+trailingNumber[1] + 1);
+                    dupDef.name = dupDef.name.substring(0, trailingNumber.index) + (+trailingNumber[1] + 1);
                 } else {
                     dupDef.name += ' 2';
                 }
@@ -526,7 +526,7 @@ export class DefView extends View implements IExprDragController {
             {
                 const trailingNumber = dupDef.name.match(/(\d+)$/);
                 if (trailingNumber) {
-                    dupDef.name = dupDef.name.substr(0, trailingNumber.index) + (+trailingNumber[1] + 1);
+                    dupDef.name = dupDef.name.substring(0, trailingNumber.index) + (+trailingNumber[1] + 1);
                 } else {
                     dupDef.name += ' 2';
                 }

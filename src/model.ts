@@ -207,10 +207,10 @@ export namespace Expr {
 
     export function anyRuntimeAsAny(expr: Expr.AnyRuntime): Expr.Any | null {
         switch (expr.type) {
-            case 'timestamp':
-                return null;
-            default:
-                return expr;
+        case 'timestamp':
+            return null;
+        default:
+            return expr;
         }
     }
 }

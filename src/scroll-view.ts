@@ -1,4 +1,4 @@
-import { Gesture, Layer, View } from './ui';
+import { Gesture, View } from './ui';
 import config from './config';
 import { Vec2 } from './spring';
 import { Scrollbar } from './scrollbar';
@@ -133,7 +133,7 @@ export class ScrollView extends View {
 
         this.contentView.position = [-this.scroll.x, -this.scroll.y];
 
-        let wantedSize = this.size.clone();
+        const wantedSize = this.size.clone();
         if (!this.scrollX) wantedSize.x = this.contentView.size.x;
         if (!this.scrollY) wantedSize.y = this.contentView.size.y;
 

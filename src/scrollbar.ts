@@ -7,7 +7,6 @@ export class Scrollbar extends View {
     length = 0;
     scrollMax = 0;
     scroll = 0;
-    // eslint-disable-next-line no-unused-vars
     onScroll: ((delta: number) => void) = () => {};
 
     thumbLayer: Layer;

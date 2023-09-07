@@ -141,17 +141,17 @@ const config = {
             matrix: 'matrico',
         },
         typeSwitch: {
-            background: [0.9, 0.9, 0.9, 1],
-            color: [0, 0, 0, 1],
-            activeBackground: [0.3, 0.3, 0.3, 1],
-            activeColor: [1, 1, 1, 1],
+            background: [0.9, 0.9, 0.9, 1] as RawVec4,
+            color: [0, 0, 0, 1] as RawVec4,
+            activeBackground: [0.3, 0.3, 0.3, 1] as RawVec4,
+            activeColor: [1, 1, 1, 1] as RawVec4,
             paddingX: 8,
             paddingY: 4,
         },
     },
 
     defs: {
-        background: [0.9, 0.9, 0.9, 1],
+        background: [0.9, 0.9, 0.9, 1] as RawVec4,
         newDefName: n => `nova difino (${n})`,
         padding: 2,
         gap: 2,
@@ -801,7 +801,7 @@ const stdlibDocs = {
 export const helpContent = {
     background: '#eee',
     foreground: 'black',
-    highlight: [0.8, 0.5, 0.3, 1],
+    highlight: [0.8, 0.5, 0.3, 1] as RawVec4,
     title: 'Helpo',
     font: '500 16px ' + fontStack,
 

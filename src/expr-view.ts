@@ -20,7 +20,6 @@ import { HelpTagged } from './help/help-tag';
 import { Vec2 } from './spring';
 import anyRuntimeAsAny = Expr.anyRuntimeAsAny;
 
-// eslint-disable-next-line no-unused-vars
 type OnInsertExpr = (expr: Expr.Any) => void;
 
 interface ExprUI {

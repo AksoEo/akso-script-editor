@@ -2,7 +2,9 @@ import { Window, View, Gesture, Transaction, Layer, TextLayer, PathLayer } from 
 import { ValueView } from './value-view';
 import { Tooltip } from './tooltip';
 import config from './config';
-import {Vec2} from "./spring";
+import { Vec2, Vec4 } from "./spring";
+import { PushedWindow, ViewContext } from './ui/context';
+import { Expr } from './model';
 
 function shallowEq (a, b) {
     if (Array.isArray(a) && Array.isArray(b)) {
@@ -13,6 +15,8 @@ function shallowEq (a, b) {
         return true;
     } else return a === b;
 }
+
+type CellType = 'null' | 'bool' | 'number' | 'string' | 'matrix';
 
 /// Renders a matrix preview.
 ///
@@ -146,6 +150,8 @@ class PreviewLine extends View {
     }
 }
 class PreviewItem extends View {
+    text: TextLayer;
+
     constructor () {
         super();
         this.text = new TextLayer();
@@ -172,7 +178,7 @@ class PreviewItem extends View {
         else if (value === null) label = 'null';
         else if (typeof value === 'number') label = '' + value;
         else if (typeof value === 'string') {
-            if (value.length > 10) label = value.substr(0, 10) + '…';
+            if (value.length > 10) label = value.substring(0, 10) + '…';
             else label = value;
         } else if (typeof value === 'boolean') label = config.primitives['' + value];
         else if (Array.isArray(value)) label = '[…]';
@@ -185,7 +191,7 @@ class PreviewItem extends View {
     }
 }
 
-export function editMatrix (ctx, value, onMutation) {
+export function editMatrix (ctx: ViewContext, value, onMutation) {
     const win = new Window();
     const handle = ctx.push(win);
     const container = new MatrixEditorContainer();
@@ -196,12 +202,14 @@ export function editMatrix (ctx, value, onMutation) {
     if (onMutation) me.onMutation = onMutation;
 }
 
-class MatrixEditorContainer extends View{
+class MatrixEditorContainer extends View {
+    windowHandle?: PushedWindow;
+
     constructor () {
         super();
         // fade in backdrop
         {
-            const tBackdrop = config.matrix.backdrop.slice();
+            const tBackdrop = new Vec4(...config.matrix.backdrop);
             tBackdrop[3] = 0;
             this.layer.background = tBackdrop;
             const t = new Transaction(1, 0.3);
@@ -220,6 +228,7 @@ class MatrixEditorContainer extends View{
     layout () {
         super.layout();
         for (const subview of this.subviews) subview.layout();
+        return this.size;
     }
 }
 
@@ -230,11 +239,14 @@ class MatrixEditorContainer extends View{
 /// - onMutation: will be called every time the value is mutated
 class MatrixEditor extends View {
     wantsChildLayout = true;
-    value = [];
+    value: Expr.MatrixValue[] = [];
     onMutation = () => {};
-    selection = { start: [0, 0], end: [1, 1] };
+    selection = { start: new Vec2(0, 0), end: new Vec2(1, 1) };
 
-    constructor (value) {
+    tableView: MatrixTableView;
+    typeSwitch: CellTypeSwitch;
+
+    constructor (value: Expr.MatrixValue[]) {
         super();
 
         this.layer.background = config.matrix.background;
@@ -298,10 +310,11 @@ class MatrixEditor extends View {
                 (this.parent.size[1] - this.layer.size[1]) / 2,
             ];
         }
+        return this.size;
     }
 }
 
-function transmuteCellValue (value, type) {
+function transmuteCellValue (value: Expr.MatrixValue, type: CellType) {
     const valueType = typeof value === 'boolean' ? 'bool'
         : typeof value === 'number' ? 'number'
             : typeof value === 'string' ? 'string'
@@ -311,7 +324,7 @@ function transmuteCellValue (value, type) {
     if (type === 'null') return null;
 
     if (valueType === 'string' && type === 'number') {
-        const num = parseFloat(value, 10);
+        const num = parseFloat(value as string);
         if (Number.isFinite(num)) return num;
         return 0;
     }
@@ -332,6 +345,15 @@ class MatrixTableView extends View {
     wantsChildLayout = true;
     typeSwitch = null;
     onMutation = () => {};
+    cellsContainer: View;
+    extensionX: TableExtension;
+    extensionY: TableExtension;
+    selection: { start: Vec2, end: Vec2 } = { start: Vec2.zero(), end: Vec2.zero() };
+    selectionView: EditorSelection;
+    value: Expr.MatrixValue[] = [];
+
+    colPositions: number[];
+    rowPositions: number[];
 
     constructor () {
         super();
@@ -350,7 +372,7 @@ class MatrixTableView extends View {
         this.addSubview(this.selectionView);
 
         Gesture.onTap(this, this.onTap);
-        Gesture.onDrag(this, this.onDragMove, this.onDragStart, this.onDragEnd, this.onDragCancel);
+        Gesture.onDrag(this, this.onDragMove, this.onDragStart);
     }
 
     // cached value
@@ -370,7 +392,7 @@ class MatrixTableView extends View {
         return [maxSubLen, this.value.length];
     }
     /// Must call get2DSize beforehand to sync is2D!
-    getValueAt (x, y) {
+    getValueAt (x: number, y: number) {
         let v = this.value[y];
         if (Array.isArray(v)) v = v[x];
         return v === undefined ? null : v;
@@ -383,7 +405,7 @@ class MatrixTableView extends View {
                 this.value[i] = [this.value[i]];
             }
             // add another item
-            this.value[i].push(null);
+            (this.value[i] as Expr.MatrixValue[]).push(null);
         }
         const t = new Transaction(1, 0.3);
         this.layout();
@@ -418,10 +440,10 @@ class MatrixTableView extends View {
     onDeleteCol = col => {
         let width = 0;
         for (let y = 0; y < this.value.length; y++) {
-            if (Array.isArray(this.value[y]) && col < this.value[y].length) {
-                this.value[y].splice(col, 1);
+            if (Array.isArray(this.value[y]) && col < (this.value[y] as Expr.MatrixValue[]).length) {
+                (this.value[y] as Expr.MatrixValue[]).splice(col, 1);
             }
-            if (Array.isArray(this.value[y])) width = Math.max(width, this.value[y].length);
+            if (Array.isArray(this.value[y])) width = Math.max(width, (this.value[y] as Expr.MatrixValue[]).length);
 
             // shift cells by 1 and put the ones at col at the end so they'll be the ones that get
             // deleted
@@ -435,7 +457,7 @@ class MatrixTableView extends View {
         if (width === 1) {
             for (let i = 0; i < this.value.length; i++) {
                 if (Array.isArray(this.value[i])) {
-                    if (this.value[i].length) this.value[i] = this.value[i][0];
+                    if ((this.value[i] as Expr.MatrixValue[]).length) this.value[i] = this.value[i][0];
                     else this.value[i] = null;
                 }
             }
@@ -595,17 +617,18 @@ class MatrixTableView extends View {
         this.updateSelection();
 
         this.layer.size = [posX, posY];
+        return this.size;
     }
 
     updateSelection () {
-        this.selectionView.startPos = [
-            this.colPositions[this.selection.start[0]],
-            this.rowPositions[this.selection.start[1]],
-        ];
-        this.selectionView.endPos = [
-            this.colPositions[this.selection.end[0]],
-            this.rowPositions[this.selection.end[1]],
-        ];
+        this.selectionView.startPos = new Vec2(
+            this.colPositions[this.selection.start.x],
+            this.rowPositions[this.selection.start.y],
+        );
+        this.selectionView.endPos = new Vec2(
+            this.colPositions[this.selection.end.x],
+            this.rowPositions[this.selection.end.y],
+        );
         this.selectionView.layout();
         this.updateTypeSwitch();
     }
@@ -613,8 +636,8 @@ class MatrixTableView extends View {
     updateTypeSwitch () {
         if (!this.typeSwitch) return;
         const types = new Set();
-        for (let y = this.selection.start[1]; y < this.selection.end[1]; y++) {
-            for (let x = this.selection.start[0]; x < this.selection.end[0]; x++) {
+        for (let y = this.selection.start.y; y < this.selection.end.y; y++) {
+            for (let x = this.selection.start.x; x < this.selection.end.x; x++) {
                 if (!this.#cells[y]) continue;
                 const cell = this.#cells[y][x];
                 if (cell) types.add(cell.type);
@@ -623,9 +646,9 @@ class MatrixTableView extends View {
         this.typeSwitch.update(types);
     }
 
-    setSelectionType = (type) => {
-        for (let y = this.selection.start[1]; y < this.selection.end[1]; y++) {
-            for (let x = this.selection.start[0]; x < this.selection.end[0]; x++) {
+    setSelectionType = (type: CellType) => {
+        for (let y = this.selection.start.y; y < this.selection.end.y; y++) {
+            for (let x = this.selection.start.x; x < this.selection.end.x; x++) {
                 if (!this.#cells[y]) continue;
                 const cell = this.#cells[y][x];
                 if (cell) {
@@ -639,10 +662,10 @@ class MatrixTableView extends View {
         t.commit();
     };
 
-    setCellType (x, y, type) {
+    setCellType (x: number, y: number, type: CellType) {
         if (this.#is2D) {
             while (y >= this.value.length) this.value.push([]);
-            const row = this.value[y];
+            const row = this.value[y] as Expr.MatrixValue[];
             while (x >= row.length) row.push(null);
             row[x] = transmuteCellValue(row[x], type);
         } else {
@@ -651,10 +674,10 @@ class MatrixTableView extends View {
         }
     }
 
-    setValueAt (x, y, value) {
+    setValueAt (x: number, y: number, value: Expr.MatrixValue) {
         if (this.#is2D) {
             while (y >= this.value.length) this.value.push([]);
-            const row = this.value[y];
+            const row = this.value[y] as Expr.MatrixValue[];
             while (x >= row.length) row.push(null);
             row[x] = value;
         } else {
@@ -664,7 +687,7 @@ class MatrixTableView extends View {
         this.needsLayout = true;
     }
 
-    getCellPositionAt (x, y) {
+    getCellPositionAt (x: number, y: number): Vec2 {
         let cellX = null;
         let cellY = null;
         for (let i = 0; i < this.rowPositions.length - 1; i++) {
@@ -685,16 +708,16 @@ class MatrixTableView extends View {
             }
         }
         if (cellX === null) return null;
-        return [cellX, cellY];
+        return new Vec2(cellX, cellY);
     }
 
-    isPosInSelection (x, y) {
-        return this.selection.start[0] <= x && this.selection.end[0] > x
-            && this.selection.start[1] <= y && this.selection.end[1] > y;
+    isPosInSelection (x: number, y: number) {
+        return this.selection.start.x <= x && this.selection.end.x > x
+            && this.selection.start.y <= y && this.selection.end.y > y;
     }
 
     onTap = ({ x, y }) => {
-        const pos = this.getCellPositionAt(x - this.position[0], y - this.position[1]);
+        const pos = this.getCellPositionAt(x - this.position.x, y - this.position.y);
         if (pos) {
             if (this.isPosInSelection(pos[0], pos[1])) {
                 // edit cell
@@ -703,7 +726,7 @@ class MatrixTableView extends View {
                 const t = new Transaction(1, 0.15);
                 // set selection
                 this.selection.start = pos;
-                this.selection.end = [pos[0] + 1, pos[1] + 1];
+                this.selection.end = new Vec2(pos.x + 1, pos.y + 1);
                 this.updateSelection();
                 t.commit();
             }
@@ -715,7 +738,7 @@ class MatrixTableView extends View {
         if (this.#dragStartPos) {
             const t = new Transaction(1, 0);
             this.selection.start = this.#dragStartPos.slice();
-            this.selection.end = [this.#dragStartPos[0] + 1, this.#dragStartPos[1] + 1];
+            this.selection.end = new Vec2(this.#dragStartPos[0] + 1, this.#dragStartPos[1] + 1);
             this.updateSelection();
             t.commit();
         }
@@ -728,8 +751,8 @@ class MatrixTableView extends View {
             const maxX = Math.max(pos[0], this.#dragStartPos[0]);
             const minY = Math.min(pos[1], this.#dragStartPos[1]);
             const maxY = Math.max(pos[1], this.#dragStartPos[1]);
-            this.selection.start = [minX, minY];
-            this.selection.end = [maxX + 1, maxY + 1];
+            this.selection.start = new Vec2(minX, minY);
+            this.selection.end = new Vec2(maxX + 1, maxY + 1);
             this.updateSelection();
             t.commit();
         }
@@ -737,7 +760,12 @@ class MatrixTableView extends View {
 }
 
 class TableHeader extends View {
-    constructor (type) {
+    deleteLayer: Layer;
+    deleteIcon: PathLayer;
+    type: 'row' | 'col';
+    onDelete?: () => void;
+
+    constructor (type: 'row' | 'col') {
         super();
         this.type = type;
         this.needsLayout = true;
@@ -795,12 +823,14 @@ class TableHeader extends View {
         } else {
             this.size = [this.headerSize, 20];
         }
+
+        return this.size;
     }
 
-    updatePointer (x, y) {
-        const px = x - this.position[0];
-        const py = y - this.position[1];
-        if (px < this.deleteLayer.size[0] && py < this.deleteLayer.size[0]) {
+    updatePointer (x: number, y: number) {
+        const px = x - this.position.x;
+        const py = y - this.position.y;
+        if (px < this.deleteLayer.size.x && py < this.deleteLayer.size.x) {
             if (!this.hovering) {
                 const t = new Transaction(1, 0.1);
                 this.hovering = true;
@@ -826,6 +856,8 @@ class TableHeader extends View {
 }
 
 class TableExtension extends View {
+    iconLayer: PathLayer;
+
     constructor (onExtend) {
         super();
 
@@ -857,6 +889,8 @@ class TableExtension extends View {
             (this.layer.size[0] - config.icons.size) / 2,
             (this.layer.size[1] - config.icons.size) / 2,
         ];
+
+        return this.size;
     }
 
     onPointerEnter () {
@@ -876,6 +910,12 @@ class TableExtension extends View {
 /// A single cell in the editor.
 class MatrixCell extends View {
     onMutation = () => {};
+    textLayer: TextLayer;
+    previewTooltip: Tooltip;
+    previewView: ValueView;
+    type: CellType;
+
+    layoutTextSize: Vec2;
 
     constructor () {
         super();
@@ -967,6 +1007,7 @@ class MatrixCell extends View {
 
         this.previewTooltip.size = this.layer.size;
         this.previewTooltip.layoutIfNeeded();
+        return this.size;
     }
 
     beginEditing () {
@@ -981,7 +1022,7 @@ class MatrixCell extends View {
                 this.value.toString(),
                 { font: config.identFont },
             ).then(value => {
-                this.value = Number.parseFloat(value, 10);
+                this.value = Number.parseFloat(value);
                 if (!Number.isFinite(this.value)) this.value = 0;
                 this.onMutation();
                 new Transaction(1, 0.3).commitAfterLayout(this.ctx);
@@ -1026,14 +1067,17 @@ class EditorStatus extends View {
 /// Editor cell type switch at the top.
 /// Displays types in the current selection and allows changing the type of all selected cells.
 class CellTypeSwitch extends View {
-    onSetSelectionType = () => {};
+    onSetSelectionType: ((type: CellType) => void) = () => {};
+    items: CellTypeSwitchItem[];
+
     constructor () {
         super();
         this.layer.cornerRadius = config.cornerRadius;
         this.layer.clipContents = true;
 
         this.items = [];
-        for (const type in config.matrix.cellTypes) {
+        for (const _type in config.matrix.cellTypes) {
+            const type = _type as CellType;
             const item = new CellTypeSwitchItem(config.matrix.cellTypes[type], () => this.setType(type));
             item.type = type;
             this.addSubview(item);
@@ -1041,13 +1085,13 @@ class CellTypeSwitch extends View {
         }
         this.needsLayout = true;
     }
-    update (types) {
+    update (types: Set<CellType>) {
         for (const item of this.items) {
             item.active = types.has(item.type);
             item.layout();
         }
     }
-    setType (type) {
+    setType (type: CellType) {
         this.onSetSelectionType(type);
     }
     layout () {
@@ -1059,12 +1103,16 @@ class CellTypeSwitch extends View {
             x += item.size[0];
         }
         this.layer.size = [x, this.items[0].size[1]];
+        return this.size;
     }
 }
 class CellTypeSwitchItem extends View {
     active = false;
     pressed = false;
     hovering = false;
+
+    labelLayer: TextLayer;
+    type: CellType;
 
     constructor (label, onTap) {
         super();
@@ -1087,13 +1135,14 @@ class CellTypeSwitchItem extends View {
 
         const labelSize = this.labelLayer.getNaturalSize();
         this.layer.size = [
-            labelSize[0] + 2 * config.matrix.typeSwitch.paddingX,
-            labelSize[1] + 2 * config.matrix.typeSwitch.paddingY,
+            labelSize.x + 2 * config.matrix.typeSwitch.paddingX,
+            labelSize.y + 2 * config.matrix.typeSwitch.paddingY,
         ];
         this.labelLayer.position = [
             config.matrix.typeSwitch.paddingX,
-            this.size[1] / 2,
+            this.size.y / 2,
         ];
+        return this.size;
     }
 
     onTapStart = () => {
@@ -1112,6 +1161,9 @@ class CellTypeSwitchItem extends View {
 
 /// Selection box.
 class EditorSelection extends View {
+    boundStart: Layer;
+    boundEnd: Layer;
+
     constructor () {
         super();
 
@@ -1133,22 +1185,24 @@ class EditorSelection extends View {
         this.addSublayer(this.boundEnd);
     }
 
-    startPos = [0, 0];
-    endPos = [0, 0];
+    startPos = new Vec2(0, 0);
+    endPos = new Vec2(0, 0);
 
     layout () {
         // layout is controlled by table view
         // super.layout();
 
         this.layer.position = this.startPos;
-        this.boundStart.position = [-this.boundStart.size[0] / 2, -this.boundStart.size[1] / 2];
+        this.boundStart.position = [-this.boundStart.size.x / 2, -this.boundStart.size.y / 2];
         this.layer.size = [
-            this.endPos[0] - this.startPos[0],
-            this.endPos[1] - this.startPos[1],
+            this.endPos.x - this.startPos.x,
+            this.endPos.y - this.startPos.y,
         ];
         this.boundEnd.position = [
-            this.layer.size[0] - this.boundEnd.size[0] / 2,
-            this.layer.size[1] - this.boundEnd.size[1] / 2,
+            this.layer.size.x - this.boundEnd.size.x / 2,
+            this.layer.size.y - this.boundEnd.size.y / 2,
         ];
+
+        return this.size;
     }
 }

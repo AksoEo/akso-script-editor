@@ -66,7 +66,7 @@ export class ViewRoot extends RenderViewRoot {
         for (const candidate of candidates) {
             const pointerType = event instanceof PointerEvent ? Gesture.PointerType[event.pointerType]
                 : event instanceof TouchEvent ? Gesture.PointerType.TOUCH
-                : Gesture.PointerType.MOUSE;
+                    : Gesture.PointerType.MOUSE;
 
             const g = candidate.target.getGesturesForType(Gesture.Type.POINTER, pointerType);
             if (g.length) {

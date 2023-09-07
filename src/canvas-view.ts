@@ -1,4 +1,4 @@
-import { View, Transaction } from './ui';
+import { View } from './ui';
 import {
     createContext,
     fromRawDefs,

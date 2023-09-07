@@ -5,7 +5,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import postcss from 'rollup-plugin-postcss';
 import json from '@rollup/plugin-json';
 import offMainThread from '@surma/rollup-plugin-off-main-thread';
-import { eslint } from 'rollup-plugin-eslint';
+import eslint from '@rollup/plugin-eslint';
 import path from 'node:path';
 import pkg from './package.json' assert { type: 'json' };
 
@@ -23,7 +23,7 @@ const inputOptions = {
         }),
         eslint({
             throwOnError: true,
-            include: ['src/**'],
+            include: ['src/**/*.ts'],
         }),
         resolve(),
         commonjs(),
@@ -36,6 +36,13 @@ const inputOptions = {
         !isTestEnv && addBackCssImport(),
     ].filter(x => x),
     external: isTestEnv ? [] : Object.keys(pkg.dependencies),
+    onwarn(msg, handler) {
+        if (isTestEnv && msg.code === 'EVAL') {
+            // not much to be done about this (error is in dependency)
+            return;
+        }
+        handler(msg);
+    }
 };
 const outputOptions = {
     dir: 'dist',

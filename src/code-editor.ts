@@ -4,8 +4,6 @@ import { EditorState, StateEffect, StateField, Range } from '@codemirror/state';
 import './asct/cm-theme.css';
 import { asct, asctStyle } from './asct/cm-mode';
 import { Defs } from './model';
-// @ts-ignore
-import { ViewContext } from './ui/context';
 
 const setInlineErrors = StateEffect.define<Range<Decoration>[]>();
 const inlineErrors = StateField.define({
@@ -79,7 +77,7 @@ export class CodeEditor {
         this.#scheduledValidate = setTimeout(() => {
             this.#scheduledValidate = null;
 
-            this.validate();
+            void this.validate();
         }, 500) as unknown as number;
     };
 
@@ -175,7 +173,6 @@ export class CodeEditor {
 
     get = () => {
         if (!this.editorView) {
-            const self = this;
             // we need to init this lazily because it breaks if we initialize it during creation
             this.editorView = new EditorView({
                 parent: this.node,

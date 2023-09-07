@@ -3,7 +3,6 @@ import { View, TextLayer, Transaction, Gesture } from './ui';
 import { version as pkgVersion } from '../package.json';
 import config from './config';
 import { EditorView } from './editor-view';
-import { CanvasView } from './canvas-view';
 import { Vec2 } from './spring';
 import { ComponentView, h, VNode } from './ui/component-view';
 

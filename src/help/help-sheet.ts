@@ -1,8 +1,6 @@
 import { helpContent } from '../config';
 import { AnyNode, NODE_DEF, NODE_DEFS } from '../model';
 import { RenderViewRoot, View } from '../ui';
-import { DefsView, DefView } from '../defs-view';
-import { ExprView } from '../expr-view';
 import { HelpTagsView } from './help-tag';
 import { PushedWindow } from '../ui/context';
 
@@ -59,7 +57,7 @@ export class HelpSheet {
         this.contentNode = document.createElement('div');
         this.node.appendChild(this.contentNode);
 
-        this.updateContent(helpContent.default);
+        this.updateContent(helpContent.default as HelpContentBlock[]);
     }
 
     tagsWindow: PushedWindow | null = null;

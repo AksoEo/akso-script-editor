@@ -7,7 +7,7 @@
   },
   "plugins": ["@typescript-eslint"],
   "rules": {
-    "no-unused-vars": "warn",
+    "no-unused-vars": "off",
     "semi": "warn",
     "comma-dangle": ["warn", "always-multiline"],
     "indent": "warn",

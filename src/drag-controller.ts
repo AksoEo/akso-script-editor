@@ -189,7 +189,7 @@ export class DragController implements IExprDragController {
 
         const exprView = getProtoView(this.#draggingNode, TypeClass);
 
-        let newPos = new Vec2(
+        const newPos = new Vec2(
             this.#onlyY ? this.#onlyYXPos : x + this.#dragOffset[0],
             y + this.#dragOffset[1],
         );

@@ -1,5 +1,5 @@
 import { tags } from '@lezer/highlight';
-import { StreamLanguage, StreamParser, StringStream, HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { StreamLanguage, StringStream, HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { bareFormIdentRegexU, bareIdentRegexU, infixIdentRegexU, numberRegexU } from './shared';
 
 const simpleTokens = [
@@ -54,7 +54,7 @@ export const asctStream = {
     startState () {
         return {};
     },
-    token (stream: StringStream, state: {}) {
+    token (stream: StringStream) {
         for (const token of simpleTokens) {
             if (stream.match(token.regex)) {
                 return token.token;
@@ -64,7 +64,7 @@ export const asctStream = {
         if (!stream.eatSpace()) stream.next();
         return null;
     },
-}
+};
 
 export const asct = StreamLanguage.define(asctStream);
 

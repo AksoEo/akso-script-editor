@@ -56,7 +56,7 @@ export function initFormVarsTab (lib: Library, tab: Tab) {
 
 function createDefaultFormVar(): FormVar {
     return {
-        name: config.formVars.defaultName(Math.random().toString(36).substr(2)),
+        name: config.formVars.defaultName(Math.random().toString(36).substring(2)),
         type: 'u',
         value: null,
         ctx: null,

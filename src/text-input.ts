@@ -1,10 +1,16 @@
 /// Handles text input; accessible via ctx.beginInput.
+import { RawVec2, Vec2 } from './spring';
+
 export class TextInput {
+    node: HTMLDivElement;
+    allowsMultiline = false;
+    input: HTMLTextAreaElement;
+
     constructor () {
         this.node = document.createElement('div');
         this.node.style.position = 'absolute';
-        this.node.style.zIndex = 3;
-        this.node.style.top = this.node.style.right = this.node.style.left = this.node.style.bottom = 0;
+        this.node.style.zIndex = '3';
+        this.node.style.top = this.node.style.right = this.node.style.left = this.node.style.bottom = '0';
         this.node.style.display = 'none';
         this.allowsMultiline = false;
 
@@ -33,9 +39,15 @@ export class TextInput {
 
     }
 
-    inputOriginal = null;
-    inputPromise = null;
-    beginInput = ([x, y], [width, height, lineHeight], text, style = {}) => new Promise((resolve) => {
+    inputOriginal: string | null = null;
+    inputPromise: null | ((s: string) => void) = null;
+
+    beginInput = (
+        [x, y]: Vec2 | RawVec2,
+        [width, height, lineHeight]: [number, number] | [number, number, number],
+        text: string,
+        style: Partial<CSSStyleDeclaration> = {},
+    ): Promise<string> => new Promise((resolve) => {
         this.endInput();
 
         this.node.style.display = 'block';
@@ -51,7 +63,8 @@ export class TextInput {
         setTimeout(() => this.input.focus(), 30); // sometimes it doesn't focus
         this.inputPromise = resolve;
     });
-    endInput (cancel) {
+
+    endInput (cancel = false) {
         this.node.style.display = 'none';
         if (!this.inputPromise) return;
         const resolve = this.inputPromise;

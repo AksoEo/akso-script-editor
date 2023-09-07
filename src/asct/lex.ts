@@ -54,7 +54,7 @@ class StrCursor {
         return this.pos === this.str.length;
     }
     regexMatch (re) {
-        return this.str.substr(this.pos).match(re);
+        return this.str.substring(this.pos).match(re);
     }
     addErrorToCurrentPos (err) {
         this.errors.push(err);
@@ -168,7 +168,7 @@ export class StringToken extends Token {
         this.contents = contents;
     }
     toString () {
-        return `"${this.contents.substr(0, 50)}"`;
+        return `"${this.contents.substring(0, 50)}"`;
     }
 }
 export class DelimToken extends Token {

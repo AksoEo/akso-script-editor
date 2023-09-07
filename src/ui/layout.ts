@@ -88,10 +88,10 @@ function flexLayout(options: FlexLayoutOptions, iteration = 0) {
     }
 
     // the total main size including gaps
-    let totalBasisSize = itemBasisSum + Math.max(0, itemBasisSizes.size - 1) * options.gap;
+    const totalBasisSize = itemBasisSum + Math.max(0, itemBasisSizes.size - 1) * options.gap;
 
     // remaining size for distributing to flex items
-    let remainingSize = contentBoxSize[mainAxis] - totalBasisSize;
+    const remainingSize = contentBoxSize[mainAxis] - totalBasisSize;
 
     const itemFlexSizes = new Map<View, Vec2>();
     let totalMainSize = Math.max(0, itemBasisSizes.size - 1) * options.gap;
@@ -151,16 +151,16 @@ function flexLayout(options: FlexLayoutOptions, iteration = 0) {
 
         let crossPos;
         switch (subview.layoutProps.crossAlignSelf || options.crossAlign) {
-            case 'start':
-            case 'stretch':
-                crossPos = padStart[crossAxis];
-                break;
-            case 'center':
-                crossPos = padStart[crossAxis] + Math.round((crossLayoutSize - subviewSize[crossAxis]) / 2);
-                break;
-            case 'end':
-                crossPos = padStart[crossAxis] + (crossLayoutSize - subviewSize[crossAxis]);
-                break;
+        case 'start':
+        case 'stretch':
+            crossPos = padStart[crossAxis];
+            break;
+        case 'center':
+            crossPos = padStart[crossAxis] + Math.round((crossLayoutSize - subviewSize[crossAxis]) / 2);
+            break;
+        case 'end':
+            crossPos = padStart[crossAxis] + (crossLayoutSize - subviewSize[crossAxis]);
+            break;
         }
         const position = Vec2.zero();
         position[mainAxis] = padStart[mainAxis] + mainOffset;
@@ -252,12 +252,12 @@ function noneLayout(view: View, inheritedMaxSize: Vec2) {
 
 export function layout(view: View): Vec2 {
     switch (view.layoutProps.layout) {
-        case 'flex':
-            return flexLayoutView(view, view.inheritedMaxSize, 0);
-        case 'z-stack':
-            return zStackLayout(view, view.inheritedMaxSize);
-        case 'none':
-            return noneLayout(view, view.inheritedMaxSize);
+    case 'flex':
+        return flexLayoutView(view, view.inheritedMaxSize, 0);
+    case 'z-stack':
+        return zStackLayout(view, view.inheritedMaxSize);
+    case 'none':
+        return noneLayout(view, view.inheritedMaxSize);
     }
 }
 
@@ -306,11 +306,11 @@ function noneIntrinsicSize(view: View) {
 
 export function layoutIntrinsicSize(view: View): Vec2 {
     switch (view.layoutProps.layout) {
-        case 'flex':
-            return flexIntrinsicSize(view);
-        case 'z-stack':
-            return noneIntrinsicSize(view);
-        case 'none':
-            return noneIntrinsicSize(view);
+    case 'flex':
+        return flexIntrinsicSize(view);
+    case 'z-stack':
+        return noneIntrinsicSize(view);
+    case 'none':
+        return noneIntrinsicSize(view);
     }
 }

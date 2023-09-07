@@ -1,4 +1,4 @@
-import { Transaction, View } from './ui';
+import { Transaction } from './ui';
 import { Toolbar } from './toolbar';
 import { CanvasView } from './canvas-view';
 import { ComponentView, h, VNode } from './ui/component-view';
