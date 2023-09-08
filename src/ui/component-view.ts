@@ -32,7 +32,7 @@ export abstract class ComponentView<Props extends Record<string, unknown>> exten
     }
 
     renderContentsIfNeeded() {
-        if (this.#didDiff || !this.ctx) return;
+        if (this.#didDiff) return;
         diff(this, this.renderContents());
         this.#didDiff = true;
         requestAnimationFrame(() => {

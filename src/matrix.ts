@@ -1,10 +1,11 @@
-import { Window, View, Gesture, Transaction, Layer, TextLayer, PathLayer } from './ui';
+import { Gesture, Layer, PathLayer, TextLayer, Transaction, View, Window } from './ui';
 import { ValueView } from './value-view';
 import { Tooltip } from './tooltip';
 import config from './config';
 import { Vec2, Vec4 } from "./spring";
 import { PushedWindow, ViewContext } from './ui/context';
 import { Expr } from './model';
+import { ComponentView, h } from './ui/component-view';
 
 function shallowEq (a, b) {
     if (Array.isArray(a) && Array.isArray(b)) {
@@ -22,36 +23,71 @@ type CellType = 'null' | 'bool' | 'number' | 'string' | 'matrix';
 ///
 /// # Properties
 /// - value: matrix to render
-export class MatrixPreview extends View {
-    #value = null;
-    get value () {
-        return this.#value;
-    }
-    set value (v) {
-        if (shallowEq(this.value, v)) {
-            if (!Array.isArray(this.value) || this.value.map((x, i) => shallowEq(x, v[i]))) return;
-        }
-        const vClone = v.slice();
-        for (let i = 0; i < vClone.length; i++) if (Array.isArray(vClone[i])) vClone[i] = vClone[i].slice();
-        this.#value = vClone;
-        this.needsLayout = true;
-    }
-
+export class MatrixPreview extends ComponentView<{ value: Expr.MatrixValue[] }> {
     decorationOnly = true;
 
-    #previewLines = [];
-
-    addPreviewLine () {
-        const pl = new PreviewLine();
-        this.addSubview(pl);
-        this.#previewLines.push(pl);
+    get value() {
+        return this.props.value;
     }
-    removePreviewLine () {
-        this.removeSubview(this.#previewLines.pop());
+
+    rowCounts: number[] = [];
+
+    renderContents() {
+        const cells = [];
+
+        const is1D = this.value.findIndex(i => Array.isArray(i)) === -1;
+
+        this.rowCounts = [];
+        for (let y = 0; y < this.value.length; y++) {
+            const line = this.value[y];
+
+            if (Array.isArray(line)) {
+                for (let x = 0; x < line.length; x++) {
+                    cells.push(h(PreviewItem, { value: line[x] }));
+                }
+                this.rowCounts.push(line.length);
+            } else {
+                cells.push(h(PreviewItem, { value: line }));
+
+                if (!is1D) this.rowCounts.push(1);
+            }
+        }
+        if (is1D) this.rowCounts.push(cells.length);
+
+        return cells;
+    }
+
+    getIntrinsicSize(): Vec2 {
+        this.renderContentsIfNeeded();
+        let maxWidth = 0;
+        let totalHeight = 0;
+
+        let i = 0;
+        for (const count of this.rowCounts) {
+            let width = 0;
+            let height = 0;
+
+            for (let x = 0; x < count; x++) {
+                const subview = this.subviews[i++];
+                const size = subview.getIntrinsicSize();
+
+                if (x) width += config.primitives.paddingXS;
+                width += size.x;
+                height = Math.max(height, size.y);
+            }
+
+            maxWidth = Math.max(width, maxWidth);
+            totalHeight += height;
+            if (i) totalHeight += config.primitives.paddingYS;
+        }
+
+        return new Vec2(maxWidth, totalHeight);
     }
 
     layout () {
-        super.layout();
+        this.needsLayout = false;
+        this.renderContentsIfNeeded();
+
         if (!Array.isArray(this.value)) {
             // no matrix!
             this.layer.opacity = 0;
@@ -59,120 +95,96 @@ export class MatrixPreview extends View {
             return;
         }
 
-        const is1D = !this.value.filter(x => Array.isArray(x)).length;
-        const lines = is1D ? 1 : this.value.length;
-
-        while (this.#previewLines.length < lines) this.addPreviewLine();
-        while (this.#previewLines.length > lines) this.removePreviewLine();
-
-        for (let i = 0; i < lines; i++) {
-            const line = this.#previewLines[i];
-            line.contents = is1D ? this.value : this.value[i];
-            line.layoutIfNeeded();
+        const subviewSizes = new Map<View, Vec2>();
+        for (const view of this.subviews) {
+            subviewSizes.set(view, view.getIntrinsicSize());
         }
 
-        const cellSizes = [];
-        for (const line of this.#previewLines) {
-            while (cellSizes.length < line.cellSizes.length) cellSizes.push(0);
-            for (let i = 0; i < line.cellSizes.length; i++) {
-                cellSizes[i] = Math.max(cellSizes[i], line.cellSizes[i]);
+        let i = 0;
+        const columnWidths = [];
+        const rowHeights = [];
+
+        for (let y = 0; y < this.rowCounts.length; y++) {
+            const count = this.rowCounts[y];
+
+            let height = 0;
+            for (let x = 0; x < count; x++) {
+                const subview = this.subviews[i++];
+                const size = subviewSizes.get(subview);
+                height = Math.max(height, size.y);
+
+                columnWidths[x] = Math.max(columnWidths[x] || 0, size.x);
             }
+            rowHeights[y] = height;
         }
 
-        let width = 0;
-        let y = -config.primitives.paddingYS;
-        for (const ln of this.#previewLines) {
-            ln.layoutPart2(cellSizes);
-
-            y += config.primitives.paddingYS;
-            ln.position = [0, y];
-            y += ln.size[1];
-            width = Math.max(width, ln.size[0]);
+        if (!columnWidths.length) {
+            return Vec2.zero();
         }
 
-        return new Vec2(width, Math.max(0, y));
+        const colWidthSum = columnWidths.reduce((a, b) => a + config.primitives.paddingXS + b);
+        const colWidthScale = this.size.x / colWidthSum;
+
+        i = 0;
+        let yPos = 0;
+        for (let y = 0; y < this.rowCounts.length; y++) {
+            const count = this.rowCounts[y];
+            if (y) yPos += config.primitives.paddingYS;
+
+            let xPos = 0;
+            for (let x = 0; x < count; x++) {
+                const subview = this.subviews[i++];
+                const prevSize = subview.size.clone();
+
+                if (x) xPos += config.primitives.paddingXS;
+
+                subview.position = [xPos, yPos];
+                subview.size = [columnWidths[x] * colWidthScale, rowHeights[y]];
+                xPos += subview.size.x;
+
+                if (!subview.size.eq(prevSize)) {
+                    subview.layout();
+                } else {
+                    subview.layoutIfNeeded();
+                }
+            }
+
+            yPos += rowHeights[y];
+        }
+
+        return new Vec2(colWidthSum, yPos);
     }
 }
-class PreviewLine extends View {
-    #contents = [];
-    cellSizes = [];
-    height = 0;
-    get contents () {
-        return this.#contents;
-    }
-    set contents (v) {
-        if (shallowEq(v, this.#contents)) return;
-        if (!Array.isArray(v)) {
-            this.#contents = [v];
-            this.needsLayout = true;
-            return;
-        }
-        this.#contents = v.slice();
-        this.needsLayout = true;
-    }
-    #items = [];
-    addItem () {
-        const item = new PreviewItem();
-        this.addSubview(item);
-        this.#items.push(item);
-    }
-    removeItem () {
-        this.removeSubview(this.#items.pop());
-    }
-    layout () {
-        super.layout();
-        while (this.#items.length < this.contents.length) this.addItem();
-        while (this.#items.length > this.contents.length) this.removeItem();
 
-        let maxHeight = 0;
-        for (let i = 0; i < this.contents.length; i++) {
-            this.#items[i].content = this.contents[i];
-            this.#items[i].layoutIfNeeded();
-            maxHeight = Math.max(maxHeight, this.#items[i].size[1]);
-        }
-
-        this.cellSizes = this.#items.map(item => item.size[0]);
-        this.height = maxHeight;
-
-        return this.size;
-    }
-    layoutPart2 (cellSizes) {
-        const height = this.height;
-        let x = -config.primitives.paddingXS;
-        for (let i = 0; i < this.#items.length; i++) {
-            const item = this.#items[i];
-            const cellSize = cellSizes[i];
-            x += config.primitives.paddingXS;
-            item.position = [x + (cellSize - item.size[0]) / 2, (height - item.size[1]) / 2];
-            x += cellSize;
-        }
-        this.layer.size = [Math.max(0, x), height];
-    }
-}
-class PreviewItem extends View {
+class PreviewItem extends ComponentView<{ value: Expr.MatrixValue }> {
     text: TextLayer;
 
-    constructor () {
-        super();
+    constructor (props) {
+        super(props);
         this.text = new TextLayer();
         this.text.font = config.identFont;
         this.text.color = config.primitives.color;
+        this.text.align = 'center';
         this.addSublayer(this.text);
         this.needsLayout = true;
     }
 
-    #content = null;
-    get content () {
-        return this.#content;
+    getIntrinsicSize(): Vec2 {
+        this.renderContentsIfNeeded();
+        return this.text.getNaturalSize();
     }
-    set content (v) {
-        if (v === this.#content) return;
-        this.#content = v;
-        this.needsLayout = true;
-    }
+
     layout () {
-        super.layout();
-        const value = this.content;
+        this.needsLayout = false;
+        this.renderContentsIfNeeded();
+
+        const textSize = this.text.getNaturalSize();
+        this.text.position = this.layer.size.divs(2);
+        return textSize;
+    }
+
+    renderContents() {
+        const { value } = this.props;
         let label;
         if (value === undefined) label = ' ';
         else if (value === null) label = 'null';
@@ -183,27 +195,48 @@ class PreviewItem extends View {
         } else if (typeof value === 'boolean') label = config.primitives['' + value];
         else if (Array.isArray(value)) label = '[…]';
         else label = '…';
-
         this.text.text = label;
-        const textSize = this.text.getNaturalSize();
-        this.text.position = [0, this.layer.size[1] / 2];
-        return textSize;
+
+        return null;
     }
 }
 
-export function editMatrix (ctx: ViewContext, value, onMutation) {
+export function editMatrix(fromView: View, ctx: ViewContext, value, onMutation) {
     const win = new Window();
     const handle = ctx.push(win);
     const container = new MatrixEditorContainer();
-    const me = new MatrixEditor(value);
-    container.addSubview(me);
+    const editor = new MatrixEditor(value);
+    container.addSubview(editor);
     container.windowHandle = handle;
     win.addSubview(container);
-    if (onMutation) me.onMutation = onMutation;
+
+    win.layout();
+    container.returnToView = fromView;
+    editor.position = fromView.absolutePosition;
+    editor.size = [editor.size.x, editor.size.x / fromView.size.x * fromView.size.y];
+    editor.layer.scale = fromView.size.x / editor.size.x;
+    editor.layer.clipContents = true;
+
+    container.layer.opacity = 0;
+    const t = new Transaction(1, 0.1);
+    container.layer.opacity = 1;
+    t.commit();
+
+    const t2 = new Transaction(1, 0.3);
+    editor.layer.scale = 1;
+    win.needsLayout = true;
+    t2.commitAfterLayout(ctx);
+
+    setTimeout(() => {
+        editor.layer.clipContents = false;
+    }, 150);
+
+    if (onMutation) editor.onMutation = onMutation;
 }
 
 class MatrixEditorContainer extends View {
     windowHandle?: PushedWindow;
+    returnToView?: View;
 
     constructor () {
         super();
@@ -222,7 +255,37 @@ class MatrixEditorContainer extends View {
 
     onTap = () => {
         // close on tap
-        if (this.windowHandle) this.windowHandle.pop();
+        if (this.windowHandle) {
+            this.decorationOnly = true;
+            const editor = this.subviews[0];
+            if (editor) {
+                const t = new Transaction(1, 0.3);
+                if (this.returnToView) {
+                    editor.layer.scale = this.returnToView.size.x / editor.size.x;
+                    editor.layer.clipContents = true;
+                    editor.layer.position = this.returnToView.absolutePosition;
+                    editor.layer.size = [editor.size.x, editor.size.x / this.returnToView.size.x * this.returnToView.size.y];
+                } else {
+                    editor.layer.position = this.size.divs(2);
+                    editor.layer.scale = 0;
+                }
+
+                const tBackdrop = new Vec4(...config.matrix.backdrop);
+                tBackdrop[3] = 0;
+                this.layer.background = tBackdrop;
+
+                t.commit();
+            }
+
+            setTimeout(() => {
+                const t = new Transaction(1, 0.1);
+                this.layer.opacity = 0;
+                t.commit();
+            }, 200);
+            setTimeout(() => {
+                this.windowHandle.pop();
+            }, 300);
+        }
     };
 
     layout () {
@@ -283,21 +346,21 @@ class MatrixEditor extends View {
         this.tableView.layoutIfNeeded();
 
         let width = 16 + Math.max(
-            this.typeSwitch.size[0],
-            this.tableView.size[0],
+            this.typeSwitch.size.x,
+            this.tableView.size.x,
         );
         let y = 8;
 
         {
-            this.typeSwitch.position = [(width - this.typeSwitch.size[0]) / 2, y];
-            width = Math.max(width, this.typeSwitch.size[0]);
-            y += this.typeSwitch.size[1];
+            this.typeSwitch.position = [(width - this.typeSwitch.size.x) / 2, y];
+            width = Math.max(width, this.typeSwitch.size.x);
+            y += this.typeSwitch.size.y;
             y += 8;
         }
         {
-            this.tableView.position = [(width - this.tableView.size[0]) / 2, y];
-            width = Math.max(width, this.tableView.size[0]);
-            y += this.tableView.size[1];
+            this.tableView.position = [(width - this.tableView.size.x) / 2, y];
+            width = Math.max(width, this.tableView.size.x);
+            y += this.tableView.size.y;
             y += 8;
         }
 
@@ -306,8 +369,8 @@ class MatrixEditor extends View {
         if (this.parent) {
             // parent is full-size; center
             this.layer.position = [
-                (this.parent.size[0] - this.layer.size[0]) / 2,
-                (this.parent.size[1] - this.layer.size[1]) / 2,
+                (this.parent.size.x - this.layer.size.x) / 2,
+                (this.parent.size.y - this.layer.size.y) / 2,
             ];
         }
         return this.size;
@@ -389,7 +452,7 @@ class MatrixTableView extends View {
             }
         }
         this.#is2D = is2D;
-        return [maxSubLen, this.value.length];
+        return new Vec2(maxSubLen, this.value.length);
     }
     /// Must call get2DSize beforehand to sync is2D!
     getValueAt (x: number, y: number) {
@@ -432,7 +495,7 @@ class MatrixTableView extends View {
         // deleted
         this.#cells.push(this.#cells.splice(row, 1)[0]);
         const t = new Transaction(1, 0.3);
-        this.fixSelection();
+        this.clampSelection();
         this.layout();
         t.commitAfterLayout(this.ctx);
         this.onMutation();
@@ -464,22 +527,22 @@ class MatrixTableView extends View {
         }
 
         const t = new Transaction(1, 0.3);
-        this.fixSelection();
+        this.clampSelection();
         this.layout();
         t.commitAfterLayout(this.ctx);
         this.onMutation();
     };
 
-    fixSelection () {
+    clampSelection () {
         const size = this.get2DSize();
         const minX = 0;
-        const maxX = size[0] - 1;
+        const maxX = size.x - 1;
         const minY = 0;
-        const maxY = size[1] - 1;
-        this.selection.start[0] = Math.max(minX, Math.min(this.selection.start[0], maxX));
-        this.selection.start[1] = Math.max(minY, Math.min(this.selection.start[1], maxY));
-        this.selection.end[0] = Math.max(minX, Math.min(this.selection.end[0] - 1, maxX)) + 1;
-        this.selection.end[1] = Math.max(minY, Math.min(this.selection.end[1] - 1, maxY)) + 1;
+        const maxY = size.y - 1;
+        this.selection.start.x = Math.max(minX, Math.min(this.selection.start.x, maxX));
+        this.selection.start.y = Math.max(minY, Math.min(this.selection.start.y, maxY));
+        this.selection.end.x = Math.max(minX, Math.min(this.selection.end.x - 1, maxX)) + 1;
+        this.selection.end.y = Math.max(minY, Math.min(this.selection.end.y - 1, maxY)) + 1;
     }
 
     #cells = [];
@@ -490,7 +553,7 @@ class MatrixTableView extends View {
         const size = this.get2DSize();
 
         // adjust row and column count
-        while (this.#cells.length < size[1]) {
+        while (this.#cells.length < size.y) {
             this.#cells.push([]);
 
             const row = this.#rowHeaders.length;
@@ -539,7 +602,7 @@ class MatrixTableView extends View {
             for (let x = 0; x < size[0]; x++) {
                 const cell = this.#cells[y][x];
                 cell.value = this.getValueAt(x, y);
-                const cellSize = cell.getCellSize();
+                const cellSize = cell.getIntrinsicSize();
 
                 rowSizes[y] = Math.max(rowSizes[y], cellSize[1]);
                 colSizes[x] = Math.max(colSizes[x], cellSize[0]);
@@ -910,22 +973,17 @@ class TableExtension extends View {
 /// A single cell in the editor.
 class MatrixCell extends View {
     onMutation = () => {};
-    textLayer: TextLayer;
     previewTooltip: Tooltip;
     previewView: ValueView;
     type: CellType;
 
     layoutTextSize: Vec2;
+    textLayers: TextLayer[] = [];
 
     constructor () {
         super();
         this.layer.strokeWidth = config.primitives.outlineWeight;
         this.layer.cornerRadius = config.cornerRadius;
-
-        this.textLayer = new TextLayer();
-        this.addSublayer(this.textLayer);
-        this.textLayer.font = config.identFont;
-        this.textLayer.color = config.primitives.color;
 
         this.previewTooltip = new Tooltip();
         this.previewView = new ValueView();
@@ -933,6 +991,56 @@ class MatrixCell extends View {
         this.previewTooltip.contents = this.previewView;
 
         this.needsLayout = true;
+    }
+
+    update() {
+        let lines = [];
+        let align: 'left' | 'center' | 'right' = 'left';
+        if (this.value === null) {
+            this.type = 'null';
+            this.layer.background = config.primitives.null;
+            this.layer.stroke = config.primitives.nullOutline;
+            lines = ['null'];
+            align = 'center';
+        } else if (typeof this.value === 'boolean') {
+            this.type = 'bool';
+            this.layer.background = config.primitives.bool;
+            this.layer.stroke = config.primitives.boolOutline;
+            lines = [config.primitives[this.value.toString()]];
+            align = 'center';
+        } else if (typeof this.value === 'number') {
+            this.type = 'number';
+            this.layer.background = config.primitives.number;
+            this.layer.stroke = config.primitives.numberOutline;
+            lines = [this.value.toString()];
+            align = 'right';
+        } else if (typeof this.value === 'string') {
+            this.type = 'string';
+            this.layer.background = config.primitives.string;
+            this.layer.stroke = config.primitives.stringOutline;
+            lines = this.value.split('\n');
+        } else if (Array.isArray(this.value)) {
+            this.type = 'matrix';
+            this.layer.background = config.primitives.matrix;
+            this.layer.stroke = config.primitives.matrixOutline;
+            lines = ['[…]'];
+            align = 'center';
+        }
+
+        if (this.textLayers.length > lines.length) this.removeSublayer(this.textLayers.pop());
+        if (this.textLayers.length < lines.length) {
+            const layer = new TextLayer();
+            layer.font = config.identFont;
+            layer.color = config.primitives.color;
+            this.addSublayer(layer);
+            this.textLayers.push(layer);
+        }
+
+        for (let i = 0; i < lines.length; i++) {
+            const layer = this.textLayers[i];
+            layer.align = align;
+            layer.text = lines[i];
+        }
     }
 
     #value = null;
@@ -944,65 +1052,43 @@ class MatrixCell extends View {
         this.#value = v;
         this.needsLayout = true;
     }
-    /// Layout part 1
-    getCellSize () {
-        if (this.value === null) {
-            this.type = 'null';
-            this.layer.background = config.primitives.null;
-            this.layer.stroke = config.primitives.nullOutline;
-            this.textLayer.text = 'null';
-            this.textLayer.align = 'center';
-        } else if (typeof this.value === 'boolean') {
-            this.type = 'bool';
-            this.layer.background = config.primitives.bool;
-            this.layer.stroke = config.primitives.boolOutline;
-            this.textLayer.text = config.primitives['' + this.value];
-            this.textLayer.align = 'center';
-        } else if (typeof this.value === 'number') {
-            this.type = 'number';
-            this.layer.background = config.primitives.number;
-            this.layer.stroke = config.primitives.numberOutline;
-            this.textLayer.text = '' + this.value;
-            this.textLayer.align = 'right';
-        } else if (typeof this.value === 'string') {
-            this.type = 'string';
-            this.layer.background = config.primitives.string;
-            this.layer.stroke = config.primitives.stringOutline;
-            this.textLayer.text = this.value;
-            this.textLayer.align = 'left';
-        } else if (Array.isArray(this.value)) {
-            this.type = 'matrix';
-            this.layer.background = config.primitives.matrix;
-            this.layer.stroke = config.primitives.matrixOutline;
-            this.textLayer.text = '[…]';
-            this.textLayer.align = 'center';
-        }
 
-        const textSize = this.textLayer.getNaturalSize();
+    lineHeight = 0;
+
+    /// Layout part 1
+    getIntrinsicSize () {
+        this.update();
+
+        const textSize = Vec2.zero();
+        for (const line of this.textLayers) {
+            const lineSize = line.getNaturalSize();
+            textSize.x = Math.max(textSize.x, lineSize.x);
+            textSize.y += lineSize.y;
+            this.lineHeight = lineSize.y;
+        }
         this.layoutTextSize = textSize;
-        return [
-            Math.max(config.matrix.minCellWidth, textSize[0] + 2 * config.primitives.paddingXS),
-            Math.max(config.matrix.minCellHeight, textSize[1] + 2 * config.primitives.paddingYS),
-        ];
+        return new Vec2(
+            Math.max(config.matrix.minCellWidth, textSize.x + 2 * config.primitives.paddingXS),
+            Math.max(config.matrix.minCellHeight, textSize.y + 2 * config.primitives.paddingYS),
+        );
     }
-    /// Call getCellSize first!!
+
+    /// Call getIntrinsicSize first!
     layout () {
-        super.layout();
-        if (this.textLayer.align === 'center') {
-            this.textLayer.position = [
-                this.layer.size[0] / 2,
-                this.layer.size[1] / 2,
-            ];
-        } else if (this.textLayer.align === 'left') {
-            this.textLayer.position = [
-                config.primitives.paddingXS,
-                this.layer.size[1] / 2,
-            ];
-        } else if (this.textLayer.align === 'right') {
-            this.textLayer.position = [
-                this.layer.size[0] - config.primitives.paddingXS,
-                this.layer.size[1] / 2,
-            ];
+        this.needsLayout = false;
+        const align = this.textLayers[0]?.align || 'left';
+
+        let y = (this.size.y - this.layoutTextSize.y) / 2;
+        for (const line of this.textLayers) {
+            const size = line.getNaturalSize();
+            if (align === 'center') {
+                line.position = [this.size.x / 2, y + this.lineHeight / 2];
+            } else if (align === 'left') {
+                line.position = [config.primitives.paddingXS, y + this.lineHeight / 2];
+            } else if (align === 'right') {
+                line.position = [this.layer.size.x - config.primitives.paddingXS, y + this.lineHeight / 2];
+            }
+            y += this.lineHeight;
         }
 
         this.previewTooltip.size = this.layer.size;
@@ -1030,7 +1116,7 @@ class MatrixCell extends View {
         } else if (this.type === 'string') {
             this.ctx.beginInput(
                 this.layer.absolutePosition,
-                this.size,
+                [...this.size, this.lineHeight] as [number, number, number],
                 this.value,
                 { font: config.identFont },
             ).then(value => {
@@ -1039,7 +1125,7 @@ class MatrixCell extends View {
                 new Transaction(1, 0.3).commitAfterLayout(this.ctx);
             });
         } else if (this.type === 'matrix') {
-            editMatrix(this.ctx, this.value, () => {
+            editMatrix(this, this.ctx, this.value, () => {
                 this.onMutation();
             });
         }

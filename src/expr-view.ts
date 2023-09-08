@@ -19,6 +19,7 @@ import config from './config';
 import { HelpTagged } from './help/help-tag';
 import { Vec2 } from './spring';
 import anyRuntimeAsAny = Expr.anyRuntimeAsAny;
+import { ComponentView, h, VNode } from './ui/component-view';
 
 type OnInsertExpr = (expr: Expr.Any) => void;
 
@@ -357,7 +358,7 @@ export class ExprView extends View implements HelpTagged {
 
         if (this.exprView?.constructor === impl) return; // it's the same, no need to reinit
 
-        this.exprView = new (impl as any)(this.expr, this);
+        this.exprView = new (impl as any)({ expr: this.expr, owner: this });
         this.flushSubviews();
         this.needsLayout = true;
     }
@@ -484,9 +485,12 @@ interface ExprViewOwner {
     dragController: DragController;
 }
 
-class RefExprView extends View {
-    expr: Expr.Ref;
+interface ExprViewProps<T> extends Record<string, unknown> {
+    expr: T;
     owner: ExprViewOwner;
+}
+
+class RefExprView extends ComponentView<ExprViewProps<Expr.Ref>> {
     textLayer: TextLayer;
     iconLayer: PathLayer;
     peekView: PeekView;
@@ -495,10 +499,8 @@ class RefExprView extends View {
     isDef = false;
     onDefRename: (name: string) => void = () => {};
 
-    constructor(expr: Expr.Ref, owner: ExprViewOwner) {
-        super();
-        this.expr = expr;
-        this.owner = owner;
+    constructor(props) {
+        super(props);
 
         this.layer.cornerRadius = config.cornerRadius;
         this.layer.strokeWidth = config.primitives.outlineWeight;
@@ -510,6 +512,13 @@ class RefExprView extends View {
         this.iconLayer.fill = config.primitives.iconColor;
 
         this.peekView = new PeekView();
+    }
+
+    get expr() {
+        return this.props.expr;
+    }
+    get owner() {
+        return this.props.owner;
     }
 
     tapAction () {
@@ -624,6 +633,11 @@ class RefExprView extends View {
         this.peekView.visible = false;
         this.layout();
     }
+
+    renderContents() {
+        return null;
+    }
+
     *iterSubviews() {
         yield this.peekView;
     }
@@ -633,16 +647,12 @@ class RefExprView extends View {
     }
 }
 
-class NullExprView extends View {
-    expr: Expr.Null;
-    owner: ExprViewOwner;
+class NullExprView extends ComponentView<ExprViewProps<Expr.Null>> {
     textLayer: TextLayer;
     iconLayer: PathLayer;
 
-    constructor(expr: Expr.Null, owner: ExprViewOwner) {
-        super();
-        this.expr = expr;
-        this.owner = owner;
+    constructor(props) {
+        super(props);
 
         this.layer.cornerRadius = config.cornerRadius;
         this.layer.background = config.primitives.null;
@@ -657,6 +667,10 @@ class NullExprView extends View {
         this.iconLayer = new PathLayer();
         this.iconLayer.path = config.icons.null;
         this.iconLayer.fill = config.primitives.iconColor;
+    }
+
+    get expr() {
+        return this.props.expr;
     }
 
     getIntrinsicSize(): Vec2 {
@@ -675,22 +689,22 @@ class NullExprView extends View {
         return new Vec2(textSize[0] + iconSize + 4 + config.primitives.paddingX * 2, textSize[1] + config.primitives.paddingYS * 2);
     }
 
+    renderContents() {
+        return null;
+    }
+
     *iterSublayers () {
         yield this.textLayer;
         yield this.iconLayer;
     }
 }
 
-class BoolExprView extends View {
-    expr: Expr.Bool;
-    owner: ExprViewOwner;
+class BoolExprView extends ComponentView<ExprViewProps<Expr.Bool>> {
     textLayer: TextLayer;
     iconLayer: PathLayer;
 
-    constructor(expr: Expr.Bool, owner: ExprViewOwner) {
-        super();
-        this.expr = expr;
-        this.owner = owner;
+    constructor(props) {
+        super(props);
 
         this.layer.cornerRadius = config.cornerRadius;
         this.layer.background = config.primitives.bool;
@@ -703,6 +717,10 @@ class BoolExprView extends View {
         this.iconLayer = new PathLayer();
         this.iconLayer.path = config.icons.bool;
         this.iconLayer.fill = config.primitives.iconColor;
+    }
+
+    get expr() {
+        return this.props.expr;
     }
 
     tapAction () {
@@ -737,22 +755,22 @@ class BoolExprView extends View {
         return this.size;
     }
 
+    renderContents() {
+        return null;
+    }
+
     *iterSublayers () {
         yield this.textLayer;
         yield this.iconLayer;
     }
 }
 
-class NumberExprView extends View {
-    expr: Expr.Number;
-    owner: ExprViewOwner;
+class NumberExprView extends ComponentView<ExprViewProps<Expr.Number>> {
     textLayer: TextLayer;
     iconLayer: PathLayer;
 
-    constructor(expr: Expr.Number, owner: ExprViewOwner) {
-        super();
-        this.expr = expr;
-        this.owner = owner;
+    constructor(props) {
+        super(props);
 
         this.layer.cornerRadius = config.cornerRadius;
         this.layer.background = config.primitives.number;
@@ -765,6 +783,10 @@ class NumberExprView extends View {
         this.iconLayer = new PathLayer();
         this.iconLayer.path = config.icons.number;
         this.iconLayer.fill = config.primitives.iconColor;
+    }
+
+    get expr() {
+        return this.props.expr;
     }
 
     tapAction () {
@@ -809,23 +831,23 @@ class NumberExprView extends View {
         return this.size;
     }
 
+    renderContents() {
+        return null;
+    }
+
     *iterSublayers () {
         yield this.textLayer;
         yield this.iconLayer;
     }
 }
 
-class StringExprView extends View {
-    expr: Expr.String;
-    owner: ExprViewOwner;
+class StringExprView extends ComponentView<ExprViewProps<Expr.String>> {
     textLayers: TextLayer[] = [];
     lineHeight = 0;
     iconLayer: PathLayer;
 
-    constructor(expr: Expr.String, owner: ExprViewOwner) {
-        super();
-        this.expr = expr;
-        this.owner = owner;
+    constructor(props) {
+        super(props);
 
         this.layer.cornerRadius = config.cornerRadius;
         this.layer.background = config.primitives.string;
@@ -835,6 +857,10 @@ class StringExprView extends View {
         this.iconLayer = new PathLayer();
         this.iconLayer.path = config.icons.string;
         this.iconLayer.fill = config.primitives.iconColor;
+    }
+
+    get expr() {
+        return this.props.expr;
     }
 
     tapAction () {
@@ -940,7 +966,10 @@ class StringExprView extends View {
             width + iconSize + 4 + config.primitives.paddingX * 2,
             layerHeight,
         );
+    }
 
+    renderContents() {
+        return null;
     }
 
     *iterSublayers () {
@@ -949,29 +978,25 @@ class StringExprView extends View {
     }
 }
 
-class MatrixExprView extends View {
-    expr: Expr.Matrix;
-    owner: ExprViewOwner;
-    preview: MatrixPreview;
+class MatrixExprView extends ComponentView<ExprViewProps<Expr.Matrix>> {
     iconLayer: PathLayer;
-
     wantsChildLayout = true;
 
-    constructor(expr: Expr.Matrix, owner: ExprViewOwner) {
-        super();
-        this.expr = expr;
-        this.owner = owner;
+    constructor(props) {
+        super(props);
 
         this.layer.cornerRadius = config.cornerRadius;
         this.layer.background = config.primitives.matrix;
         this.layer.stroke = config.primitives.matrixOutline;
         this.layer.strokeWidth = config.primitives.outlineWeight;
 
-        this.preview = new MatrixPreview();
-
         this.iconLayer = new PathLayer();
         this.iconLayer.path = config.icons.matrix;
         this.iconLayer.fill = config.primitives.iconColor;
+    }
+
+    get expr() {
+        return this.props.expr;
     }
 
     tapAction () {
@@ -981,7 +1006,7 @@ class MatrixExprView extends View {
         };
         const prevValue = cloneMatrix(this.expr.value);
 
-        editMatrix(this.ctx, this.expr.value, () => {
+        editMatrix(this, this.ctx, this.expr.value, () => {
             const newValue = this.expr.value;
             this.ctx.history.commitChange('change-matrix', () => {
                 this.expr.value = newValue;
@@ -994,40 +1019,50 @@ class MatrixExprView extends View {
             });
 
             this.needsLayout = true;
-            this.preview.needsLayout = true;
         });
     }
 
     getIntrinsicSize(): Vec2 {
+        this.renderContentsIfNeeded();
+        const preview = this.subviews[0];
+        if (!preview) return Vec2.zero();
+
         const iconSize = config.icons.size;
 
-        this.preview.value = this.expr.value;
-        this.preview.size = this.preview.layoutIfNeeded();
+        const previewSize = preview.getIntrinsicSize();
 
         return new Vec2(
-            this.preview.size[0] + iconSize + 4 + config.primitives.paddingX * 2,
-            Math.max(iconSize, this.preview.size[1]) + config.primitives.paddingYS * 2,
+            previewSize.x + iconSize + config.primitives.paddingXS * 3,
+            Math.max(iconSize, previewSize.y) + config.primitives.paddingYS * 2,
         );
     }
 
     layout () {
         this.needsLayout = false;
+        this.renderContentsIfNeeded();
+
         const iconSize = config.icons.size;
-        this.iconLayer.position = [4, 4];
+        this.iconLayer.position = [config.primitives.paddingXS, config.primitives.paddingYS];
 
-        this.preview.value = this.expr.value;
-        this.preview.size = this.preview.layoutIfNeeded();
+        const preview = this.subviews[0];
+        if (!preview) return Vec2.zero();
 
-        this.preview.position = [4 + iconSize + 4, (this.layer.size[1] - this.preview.size[1]) / 2];
+        preview.position = [config.primitives.paddingXS * 2 + iconSize, config.primitives.paddingYS];
+        preview.size = [
+            this.size.x - config.primitives.paddingXS * 3 - iconSize,
+            this.size.y - config.primitives.paddingYS * 2,
+        ];
+        preview.layout();
 
         return this.size;
     }
 
+    renderContents() {
+        return h(MatrixPreview, { value: this.props.expr.value });
+    }
+
     *iterSublayers () {
         yield this.iconLayer;
-    }
-    *iterSubviews () {
-        yield this.preview;
     }
 }
 
@@ -1039,7 +1074,7 @@ class ListExprView extends View {
 
     wantsChildLayout = true;
 
-    constructor(expr: Expr.List, owner: ExprViewOwner) {
+    constructor({ expr, owner }: { expr: Expr.List, owner: ExprViewOwner }) {
         super();
         this.expr = expr;
         this.owner = owner;
@@ -1176,7 +1211,7 @@ class CallExprView extends View {
 
     isInfix = false;
 
-    constructor(expr: Expr.Call, owner: ExprViewOwner) {
+    constructor({ expr, owner }: { expr: Expr.Call, owner: ExprViewOwner }) {
         super();
         this.expr = expr;
         this.owner = owner;
@@ -1429,7 +1464,7 @@ class FnDefExprView extends View {
     owner: ExprViewOwner;
     textLayer: TextLayer;
 
-    constructor(expr: Expr.FnDef, owner: ExprViewOwner) {
+    constructor({ expr, owner }: { expr: Expr.FnDef, owner: ExprViewOwner }) {
         super();
         this.expr = expr;
         this.owner = owner;
@@ -1474,7 +1509,7 @@ class SwitchExprView extends View {
 
     wantsChildLayout = true;
 
-    constructor(expr: Expr.Switch, owner: ExprViewOwner) {
+    constructor({ expr, owner }: { expr: Expr.Switch, owner: ExprViewOwner }) {
         super();
         this.expr = expr;
         this.owner = owner;
@@ -1532,7 +1567,7 @@ class TimestampExprView extends View {
     textLayer: TextLayer;
     iconLayer: PathLayer;
 
-    constructor(expr: { value: Date }) {
+    constructor({ expr }: { expr: { value: Date } }) {
         super();
         this.expr = expr;
         this.layer.cornerRadius = config.cornerRadius;

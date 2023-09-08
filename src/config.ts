@@ -110,7 +110,7 @@ const config = {
     },
 
     matrix: {
-        backdrop: [1, 1, 1, 0.3] as RawVec4,
+        backdrop: [0, 0, 0, 0.5] as RawVec4,
         background: [1, 1, 1, 1] as RawVec4,
         cellSpacing: 4,
         minCellWidth: 60,
