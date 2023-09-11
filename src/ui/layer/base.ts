@@ -185,6 +185,7 @@ export class LayerProperty<T extends VecAny> {
             this.hasPending = false;
             this.initTime = null;
             this.target = target;
+            this.cancelWAAnimation();
             return;
         }
 

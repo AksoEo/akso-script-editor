@@ -244,7 +244,8 @@ function noneLayout(view: View, inheritedMaxSize: Vec2) {
     const childMaxSize = inheritMaxSize(view, view.inheritedMaxSize);
     for (const subview of view.subviews) {
         subview.inheritedMaxSize = childMaxSize;
-        subview.size = subview.layout();
+        subview.size = subview.getIntrinsicSize();
+        subview.layout();
     }
 
     return view.size;
@@ -268,21 +269,27 @@ function flexIntrinsicSize(view: View) {
     let maxCrossSize = 0;
     let mainSizeSum = 0;
 
-    let i = 0;
-
-    if (typeof view.layoutProps.mainAlign === 'object') {
-        i = view.layoutProps.mainAlign.subviewIndex;
-        mainSizeSum = view.layoutProps.mainAlign.alignToOffset;
-    }
-
-    for (; i < view.subviews.length; i++) {
+    let mainOffset = 0;
+    for (let i = 0; i < view.subviews.length; i++) {
         const subview = view.subviews[i];
-
         const size = subview.getIntrinsicSize();
+
+        if (typeof view.layoutProps.mainAlign === 'object') {
+            if (i < view.layoutProps.mainAlign.subviewIndex - 1) {
+                mainOffset += size[mainAxis];
+                if (i) mainOffset += view.layoutProps.gap;
+            }
+        }
+
         if (!subview.layoutProps.flexShrink) {
             mainSizeSum += size[mainAxis];
         }
         maxCrossSize = Math.max(maxCrossSize, size[crossAxis]);
+    }
+
+    if (typeof view.layoutProps.mainAlign === 'object') {
+        const remainingOffset = Math.max(0, view.layoutProps.mainAlign.alignToOffset - mainOffset);
+        mainSizeSum += remainingOffset;
     }
 
     const outSize = Vec2.zero();

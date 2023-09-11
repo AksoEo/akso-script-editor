@@ -260,6 +260,10 @@ class InnerDefsView extends View {
             y += this.addDefView.getIntrinsicSize().y;
         }
 
+        if (this.owner.tentativeDef) {
+            y += this.owner.tentativeDef[1];
+        }
+
         y += 24;
 
         return new Vec2(
@@ -681,7 +685,7 @@ export class DefView extends View implements IExprDragController {
         this.valueView.error = this.cachedError;
         this.valueView.hidden = !this.cachedError && this.cachedValue === undefined;
 
-        if (this.parent instanceof InnerDefsView) {
+        if (this.parent instanceof InnerDefsView || this._isBeingDragged) {
             this.layoutProps.mainAlign = DefView.LIST_MAIN_ALIGN;
         } else {
             this.layoutProps.mainAlign = 'center';
